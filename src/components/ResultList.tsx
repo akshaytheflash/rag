@@ -20,7 +20,7 @@ export function ResultList({ hits, query }: ResultListProps) {
         <h2 className="resultsCount">
           {hits.length} {hits.length === 1 ? "passage" : "passages"}
         </h2>
-        <p className="resultsMeta">ranked by cosine similarity to &ldquo;{query}&rdquo;</p>
+        <p className="resultsMeta">ranked by fused relevance to &ldquo;{query}&rdquo;</p>
       </div>
 
       <ol className="resultsList">
@@ -28,8 +28,8 @@ export function ResultList({ hits, query }: ResultListProps) {
           // The last heading is the entry itself, shown as the title, so the
           // breadcrumb is whatever sits above it.
           const ancestors = hit.headingPath.slice(0, -1);
-          const score = Math.max(0, Math.min(1, hit.similarity));
           const pageTitle = hit.title !== hit.sectionTitle ? hit.title : null;
+          const lexicalOnly = hit.similarity === null;
 
           return (
             <li
@@ -74,11 +74,27 @@ export function ResultList({ hits, query }: ResultListProps) {
                 <p className="resultUrl">{hit.url.replace(/^https?:\/\//, "")}</p>
 
                 <p className="scoreRow">
-                  <span className="scoreLabel">similarity</span>
-                  <span className="scoreBar">
-                    <span className="scoreFill" style={{ width: `${(score * 100).toFixed(1)}%` }} />
+                  {/*
+                    Says which retriever found the passage rather than showing a
+                    single opaque number. "Both" is the strongest signal here:
+                    the wording matched and the meaning matched. A lexical-only
+                    hit has no similarity at all, and reporting 0.000 would read
+                    as a measurement when nothing was measured.
+                  */}
+                  <span className="scoreLabel">matched by</span>
+                  <span className="matchRow">
+                    {hit.matchedBy.includes("semantic") ? (
+                      <span className="matchTag">meaning</span>
+                    ) : null}
+                    {hit.matchedBy.includes("lexical") ? (
+                      <span className="matchTag">wording</span>
+                    ) : null}
                   </span>
-                  <span className="scoreValue">{score.toFixed(3)}</span>
+                  <span className="scoreValue">
+                    {lexicalOnly
+                      ? "exact terms"
+                      : `${hit.matchedBy.length === 2 ? "both" : "similarity"} ${hit.similarity!.toFixed(3)}`}
+                  </span>
                 </p>
 
                 <Passage hit={hit} />

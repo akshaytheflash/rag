@@ -15,6 +15,7 @@
  */
 import { RecursiveCharacterTextSplitter } from "@langchain/textsplitters";
 import { Document } from "@langchain/core/documents";
+import { countWordPieces, countWordPiecesBatch } from "../lib/tokenize";
 import type { Block, Section } from "./extract";
 
 export interface ChunkOptions {
@@ -28,25 +29,6 @@ export interface ChunkOptions {
 
 /** Word-piece position limit of the embedding model. See lib/embed.MAX_TOKENS. */
 export const MAX_MODEL_TOKENS = 256;
-
-/**
- * Characters per word-piece in the densest content in the corpus.
- *
- * Prose runs about 5.0 and documentation reference blocks about 3.2, but
- * neither is the floor. Measured across ~15,800 real chunks from all three
- * manuals, the worst ratio is 1.33 - PostgreSQL's operator tables, where each
- * line is a handful of symbols like `>=(inet,inet)`. Python's complexity
- * tables reach 1.38 and FastAPI's contributor lists 1.86.
- *
- * Every ceiling in this file is sized against this number rather than against
- * prose, because a ceiling that is optimistic for the densest content is a
- * ceiling that truncates. It was fitted per-manual first and each manual was
- * denser than the last; 1.33 is the floor across all of them.
- *
- * The regression test measures this again against the real tokenizer, so the
- * assumption cannot rot as the corpus changes.
- */
-const CODE_CHARS_PER_PIECE = 1.3;
 
 /**
  * Target chunk size, in estimated tokens.
@@ -68,84 +50,23 @@ export const DEFAULT_CHUNK_OPTIONS: ChunkOptions = {
 };
 
 /**
- * Hard ceiling on a code block, in characters.
+ * Coarse ceiling on a code block, in characters.
  *
  * A code block is normally never subdivided - cutting a sample mid-statement
- * is the damage this pipeline exists to avoid. But "never" had no upper bound,
- * and that exemption is exactly where truncation went unnoticed: FastAPI's
- * `TYPE:` / `DEFAULT:` reference sidebar produces single blocks up to 33,829
- * characters, which tokenise to 8,266 word-pieces. MiniLM truncates at 256, so
- * all but the first 3% of those passages were stored in the database and
- * invisible to every query.
+ * is the damage this pipeline exists to avoid - but "never" had no upper bound,
+ * and that exemption is where truncation hid: FastAPI's `TYPE:` / `DEFAULT:`
+ * sidebar produced single blocks of 33,829 characters, which tokenise to 8,266
+ * word-pieces against a 256 limit. Only the first 3% was ever embedded.
  *
- * When a block exceeds this, it is split at *line* boundaries. A line break is
- * a syntactic boundary in every language in the corpus, so this preserves the
- * principle: no statement is ever cut in half. It just stops being unlimited.
+ * When a block exceeds this it is split at *line* boundaries. A newline is a
+ * syntactic boundary in every language in the corpus, so no statement is ever
+ * cut in half. The principle survives; it just stops being unconditional.
  *
- * Derived from the model's limit rather than from the chunk target. Code
- * measures ~3.2 characters per word-piece against prose's ~5.0, so a ceiling
- * sized as a multiple of the target is optimistic by the time it reaches dense
- * code: the first attempt at targetTokens * 8 still overflowed at 464
- * word-pieces. Backing off to the measured code density leaves a chunk under
- * the limit at any language's word-piece rate.
+ * This is a coarse first cut, not the guarantee. It decides only how coarsely
+ * to subdivide; enforceModelLimit() then measures the result with the real
+ * tokenizer and divides further if it still does not fit.
  */
-export const MAX_CODE_CHARS = Math.floor(
-  (MAX_MODEL_TOKENS * CODE_CHARS_PER_PIECE) / 2,
-);
-
-/**
- * Largest chunk the merge step will assemble, in characters.
- *
- * all-MiniLM-L6-v2 truncates at 256 word-pieces (MAX_TOKENS in lib/embed).
- * Measured against the real tokenizer, the densest content in this corpus -
- * documentation reference blocks - runs about 3.2 characters per word-piece, so
- * this ceiling keeps a merged chunk inside the limit whether it holds prose or
- * code.
- *
- * Mirrors MAX_TOKENS deliberately rather than importing it: this module runs in
- * the ingestion CLI, and importing lib/embed would pull the ONNX runtime into
- * a process that never embeds anything. tests/chunk-model-fit.test.ts asserts
- * the two agree.
- */
-export const MERGE_CHAR_CEILING = Math.floor(MAX_MODEL_TOKENS * CODE_CHARS_PER_PIECE);
-
-/**
- * Move a slice off the end of `prev` and onto `last`, in place.
- *
- * Used when merging would overflow: rather than drop the runt, both chunks are
- * rebalanced across the boundary. Returns false when no usable boundary exists,
- * which leaves the caller to drop it as before.
- *
- * Cuts only at sentence boundaries. A split mid-sentence would leave two
- * fragments, neither of which stands alone - the opposite of the point.
- */
-function rebalanceTail(prev: ChunkRecord, last: ChunkRecord, minTokens: number): boolean {
-  const need = (minTokens - last.tokenEstimate) * 4;
-  if (need <= 0) return false;
-
-  const window = prev.pageContent;
-  for (let cut = window.length - need; cut > window.length * 0.4; cut--) {
-    if (!/[.!?]\s/.test(window.slice(cut - 1, cut + 1))) continue;
-    const movedText = window.slice(cut).trim();
-    const keptText = window.slice(0, cut).trimEnd();
-    if (estimateTokens(movedText) < minTokens || !keptText) continue;
-
-    Object.assign(prev, {
-      pageContent: keptText,
-      tokenEstimate: estimateTokens(keptText),
-    });
-    prev.metadata = { ...prev.metadata, pageContent: keptText };
-
-    const grown = `${movedText}\n\n${last.pageContent}`;
-    Object.assign(last, {
-      pageContent: grown,
-      tokenEstimate: estimateTokens(grown),
-    });
-    last.metadata = { ...last.metadata, pageContent: grown };
-    return true;
-  }
-  return false;
-}
+export const MAX_CODE_CHARS = 1600;
 
 /** Rough token estimate. Good enough for budgeting; never used for billing. */
 export function estimateTokens(text: string): number {
@@ -317,6 +238,44 @@ function overlapTail(text: string, overlapChars: number): string {
   return window.trim();
 }
 
+/**
+ * Move a slice off the end of `prev` and onto `last`, in place.
+ *
+ * Used when merging would make the result too large: rather than drop the runt,
+ * both chunks are rebalanced across the boundary. Returns false when no usable
+ * boundary exists, which leaves the caller to drop it as before.
+ *
+ * Cuts only at sentence boundaries. A split mid-sentence would leave two
+ * fragments, neither of which stands alone - the opposite of the point.
+ */
+function rebalanceTail(prev: ChunkRecord, last: ChunkRecord, minTokens: number): boolean {
+  const need = (minTokens - last.tokenEstimate) * 4;
+  if (need <= 0) return false;
+
+  const window = prev.pageContent;
+  for (let cut = window.length - need; cut > window.length * 0.4; cut--) {
+    if (!/[.!?]\s/.test(window.slice(cut - 1, cut + 1))) continue;
+    const movedText = window.slice(cut).trim();
+    const keptText = window.slice(0, cut).trimEnd();
+    if (estimateTokens(movedText) < minTokens || !keptText) continue;
+
+    Object.assign(prev, {
+      pageContent: keptText,
+      tokenEstimate: estimateTokens(keptText),
+    });
+    prev.metadata = { ...prev.metadata, pageContent: keptText };
+
+    const grown = `${movedText}\n\n${last.pageContent}`;
+    Object.assign(last, {
+      pageContent: grown,
+      tokenEstimate: estimateTokens(grown),
+    });
+    last.metadata = { ...last.metadata, pageContent: grown };
+    return true;
+  }
+  return false;
+}
+
 export async function chunkSection(
   section: Section,
   ordinalStart: number,
@@ -339,33 +298,31 @@ export async function chunkSection(
 
     out.push(makeChunk(text, ordinal++, section.headingPath));
 
-    // Carry overlap forward only when doing so keeps the next chunk inside the
-    // tokenizer's limit. On an already-ceiling-sized code piece the overlap
-    // would push it over, and losing overlap is a far smaller cost than
-    // losing the tail of the passage.
+    // Carry overlap forward only when the result still fits. On an
+    // already-ceiling-sized piece the overlap would push it over, and losing
+    // overlap costs far less than losing the tail of a passage. enforceModelLimit
+    // would catch it either way; skipping it here avoids the fragmentation.
     const tail = overlapTail(text, options.overlapChars);
-    carry = text.length + tail.length <= MERGE_CHAR_CEILING ? tail : "";
+    carry = tail && text.length + tail.length <= targetChars * 2 ? tail : "";
   }
 
   // Deal with a runt tail. A trailing chunk this small is almost always a
   // fragment rather than a retrievable passage, so it is folded into the
-  // previous chunk - but only if the result still fits the tokenizer's limit.
+  // previous chunk - but only if the result stays within a sane size. The
+  // tokenizer has the final say; see enforceModelLimit.
   //
-  // The ceiling is in characters, derived from the *densest* measured content
-  // (code at ~3.2 chars/word-piece), so a merge is safe whatever it contains.
-  //
-  // When the merge would overflow, the tail is redistributed instead: a slice
-  // is moved off the end of the previous chunk to join the runt. Dropping the
-  // runt would lose text, and losing text is the one failure this whole module
-  // exists to prevent - a passage that never reaches the index can never answer
-  // a query.
+  // When merging would make the result unreasonably large, the tail is
+  // redistributed instead: a slice is moved off the end of the previous chunk
+  // to join the runt. Dropping the runt would lose text, and losing text is
+  // the one failure this whole module exists to prevent - a passage that never
+  // reaches the index can never answer a query.
   while (out.length > 1) {
     const last = out[out.length - 1];
     const prev = out[out.length - 2];
     if (last.tokenEstimate >= options.minTokens) break;
 
     const merged = `${prev.pageContent}\n\n${last.pageContent}`;
-    if (merged.length <= MERGE_CHAR_CEILING) {
+    if (merged.length <= targetChars * 2) {
       Object.assign(prev, {
         pageContent: merged,
         tokenEstimate: estimateTokens(merged),
@@ -385,26 +342,82 @@ export async function chunkSection(
     }
   }
 
-  // Final guard. Every rule above reasons from a block's declared `kind`, but
-  // classification is not trustworthy enough to rely on alone:
-  //
-  //   - FastAPI's request-body examples arrive as prose, so MAX_CODE_CHARS
-  //     never applied and an 800-character "prose" chunk tokenised at 3.2
-  //     chars/word-piece instead of 5.0.
-  //   - Dense non-Latin text does the same with no code involved: a "most
-  //     starred repositories" list mixes symbols and CJK characters and reaches
-  //     314 word-pieces in 790 characters.
-  //
-  // So size is checked against the densest measured rate regardless of what the
-  // content claims to be, and anything still over is divided at line
-  // boundaries. This runs after merging and renumbering, so nothing downstream
-  // can reintroduce an oversized chunk.
-  const safe = out.flatMap((chunk) => {
-    if (chunk.pageContent.length <= MERGE_CHAR_CEILING) return [chunk];
-    return splitCodeByLine(chunk.pageContent, MERGE_CHAR_CEILING).map((piece) =>
-      makeChunk(piece, 0, chunk.headingPath),
+  return enforceModelLimit(out, ordinalStart);
+}
+
+/**
+ * The guarantee that no chunk reaches the index in a form the model truncates.
+ *
+ * Every other rule in this file is a heuristic about characters, and all of
+ * them are wrong for some part of the corpus - prose runs 5.0 characters per
+ * word-piece, PostgreSQL's operator tables 1.33, and the block's declared
+ * `kind` is not always honest about which it holds. This step measures the
+ * actual tokenisation and divides anything that does not fit, at line
+ * boundaries, repeatedly if necessary.
+ *
+ * Measuring costs one tokenizer pass over text that is about to be embedded
+ * anyway. Guessing was cheaper and demonstrably wrong twice: a 3.2 constant
+ * left 32 chunks per 60 pages truncated, and a 1.33 constant - correct for the
+ * densest content - fragmented the FastAPI corpus from 2,803 chunks into
+ * 11,702 by cutting perfectly good prose into fragments. Neither failure
+ * announced itself; only measuring the output catches both.
+ */
+async function enforceModelLimit(
+  chunks: ChunkRecord[],
+  ordinalStart: number,
+): Promise<ChunkRecord[]> {
+  const safe: ChunkRecord[] = [];
+
+  for (const chunk of chunks) {
+    // Split proportionally to what was measured, then correct.
+    //
+    // Halving from length/2 was tried first and overshoots badly: a chunk only
+    // slightly over the limit gets cut in half anyway, which is why it dropped
+    // the average FastAPI passage from 753 to 380 characters. Smaller passages
+    // retrieve worse, because a fragment has lost the context that made it
+    // match in the first place. Scaling by the measured overage keeps pieces as
+    // large as they can be and still fit.
+    const measured = await countWordPieces(chunk.pageContent);
+    if (measured <= MAX_MODEL_TOKENS) {
+      safe.push(chunk);
+      continue;
+    }
+
+    const proportional = Math.max(
+      1,
+      Math.floor((chunk.pageContent.length * MAX_MODEL_TOKENS) / measured),
     );
-  });
+    let limit = proportional;
+    let pieces = splitCodeByLine(chunk.pageContent, limit);
+
+    // Correct in both directions: halve if still too big, and grow back while
+    // there is headroom, so the split lands just inside the limit.
+    while (pieces.length > 1) {
+      const counts = await countWordPiecesBatch(pieces);
+      const worst = Math.max(...counts);
+      if (worst <= MAX_MODEL_TOKENS) {
+        if (worst < MAX_MODEL_TOKENS * 0.85 && limit < chunk.pageContent.length) {
+          limit = Math.min(chunk.pageContent.length, limit * 2);
+          const grown = splitCodeByLine(chunk.pageContent, limit);
+          if (grown.length < pieces.length) {
+            const grownCounts = await countWordPiecesBatch(grown);
+            if (Math.max(...grownCounts) > MAX_MODEL_TOKENS) break;
+            pieces = grown;
+            continue;
+          }
+        }
+        break;
+      }
+      const next = Math.max(1, Math.floor(limit / 2));
+      if (next === limit) break; // granularity exhausted; nothing left to try
+      limit = next;
+      pieces = splitCodeByLine(chunk.pageContent, limit);
+    }
+
+    for (const piece of pieces) {
+      safe.push(makeChunk(piece, 0, chunk.headingPath));
+    }
+  }
 
   // Re-number so ordinals stay dense and predictable.
   safe.forEach((chunk, i) => {

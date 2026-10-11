@@ -12,6 +12,7 @@ import { discoverPages } from "./discover";
 import { extractPage, type Section } from "./extract";
 import { fetchHtml, mapWithConcurrency, USER_AGENT } from "./http";
 import {
+  documentKey,
   persistDocuments,
   prepareDocument,
   pruneMissingDocuments,
@@ -102,6 +103,7 @@ export async function ingestSource(
   clearInterval(ticker);
 
   const prepared: PreparedDocument[] = [];
+  const seenKeys = new Set<string>();
 
   for (const result of results) {
     if (result.status === "rejected") {
@@ -131,6 +133,13 @@ export async function ingestSource(
       anchorSeen.set(base, occurrence + 1);
 
       const doc = await prepareDocument(config.id, page, section, chunkOptions, occurrence);
+
+      // A section that produces no chunks still counts as seen. It is simply
+      // not written - and because it is recorded here, the pruner removes the
+      // old row instead of leaving a stale passage in the index that no future
+      // run could ever refresh or delete.
+      seenKeys.add(documentKey(doc.url, doc.anchor));
+
       if (doc.chunks.length > 0) prepared.push(doc);
     }
   }
@@ -157,13 +166,10 @@ export async function ingestSource(
   }
 
   // Only prune on a complete pass. With --limit we have deliberately not
-  // looked at most of the source, so treating the unseen pages as deleted
+  // looked at most of the source, so treating the unseen sections as deleted
   // would wipe the index during a smoke test.
   if (!options.limit) {
-    const seenUrls = new Set(
-      results.flatMap((r) => (r.status === "fulfilled" ? [r.value.canonicalUrl] : [])),
-    );
-    const pruned = await pruneMissingDocuments(config.id, seenUrls);
+    const pruned = await pruneMissingDocuments(config.id, seenKeys);
     if (pruned > 0) log(`  removed ${pruned} sections that no longer exist upstream`);
   }
 

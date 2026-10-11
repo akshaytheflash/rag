@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { chunkPage, chunkSection, DEFAULT_CHUNK_OPTIONS, MAX_CODE_CHARS, estimateTokens } from "../src/ingest/chunk";
+import { chunkPage, chunkSection, DEFAULT_CHUNK_OPTIONS, estimateTokens } from "../src/ingest/chunk";
 import type { Block, Section } from "../src/ingest/extract";
 
 function text(s: string): Block {
@@ -44,12 +44,12 @@ describe("chunkSection", () => {
     expect(chunks[0].headingPath).toEqual(["Guide", "A section"]);
   });
 
-  it("never splits a code block across chunks", async () => {
-    // Sized to stay under MAX_CODE_CHARS, so this exercises the ordinary case:
-    // a code sample that fits is emitted whole, never subdivided.
-    const lines = Math.floor(MAX_CODE_CHARS / 26);
-    const long = Array.from({ length: lines }, (_, i) => `    step_${i} = compute(${i})`).join("\n");
-    expect(long.length).toBeLessThanOrEqual(MAX_CODE_CHARS);
+  it("never splits a code block that fits the model's limit", async () => {
+    // Sized by word-pieces, not characters: the guarantee is that a block the
+    // model can embed whole is emitted whole. Character count cannot express
+    // that, since code and prose differ by more than 3x in characters per
+    // word-piece.
+    const long = Array.from({ length: 30 }, (_, i) => `    step_${i} = compute(${i})`).join("\n");
 
     const chunks = await chunkSection(section([code(long)]), 0);
 
@@ -62,12 +62,12 @@ describe("chunkSection", () => {
     // at line boundaries - which still satisfies the original promise that a
     // code block is never cut mid-statement, and is what stops the chunker
     // storing text the embedding model will silently truncate.
-    const long = Array.from({ length: Math.ceil(MAX_CODE_CHARS / 26) + 40 }, (_, i) => `    step_${i} = compute(${i})`).join("\n");
+    const long = Array.from({ length: 120 }, (_, i) => `    step_${i} = compute(${i})`).join("\n");
     const chunks = await chunkSection(section([code(long)]), 0);
 
     expect(chunks.length).toBeGreaterThan(1);
     const lines = chunks.flatMap((c) => c.pageContent.split("\n"));
-    const expected = Math.ceil(MAX_CODE_CHARS / 26) + 40;
+    const expected = 120;
     for (let i = 0; i < expected; i++) {
       expect(lines).toContain(`    step_${i} = compute(${i})`);
     }

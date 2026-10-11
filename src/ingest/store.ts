@@ -307,20 +307,40 @@ export async function persistDocuments(
   stats.chunksDeleted += deleted.rowCount ?? 0;
 }
 
-/** Remove documents for a source that no longer appear upstream. */
+/**
+ * Remove documents for a source that no longer appear upstream.
+ *
+ * Pruned by natural key `(url, anchor)`, not by URL alone. A section can
+ * survive upstream while ceasing to produce any passages - FastAPI's
+ * contributor list is now dropped at extraction as unmatchable, so the section
+ * still exists as a heading but yields zero chunks. Pruning on the URL would
+ * see that page as "seen" and keep the section, leaving its old chunks in the
+ * index forever: never refreshed, never pruned, and still returned by queries.
+ */
 export async function pruneMissingDocuments(
   source: SourceId,
-  seenUrls: Set<string>,
+  seenKeys: Set<string>,
 ): Promise<number> {
-  const rows = await query<{ id: string; url: string }>(
-    "SELECT id, url FROM documents WHERE source = $1",
+  const rows = await query<{ id: string; url: string; anchor: string }>(
+    "SELECT id, url, anchor FROM documents WHERE source = $1",
     [source],
   );
-  const stale = rows.filter((r) => !seenUrls.has(r.url));
+  const stale = rows.filter((r) => !seenKeys.has(documentKey(r.url, r.anchor)));
   if (stale.length === 0) return 0;
   const ids = stale.map((r) => r.id);
   await query("DELETE FROM documents WHERE id = ANY($1::bigint[])", [ids]);
   return ids.length;
+}
+
+/**
+ * Natural key of a document row, matching how ingestion derives anchors.
+ *
+ * Shared by the ingest loop and the pruner so the two can never disagree about
+ * which section is which - a mismatch would prune live sections or keep dead
+ * ones, and neither failure announces itself.
+ */
+export function documentKey(url: string, anchor: string): string {
+  return `${url}#${anchor}`;
 }
 
 export async function recordSourceVersion(source: SourceId, version: string): Promise<void> {
