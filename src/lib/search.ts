@@ -12,6 +12,7 @@
 import { query } from "./db";
 import { embedOne, toVectorLiteral } from "./embed";
 import { optionalEnvNumber } from "./env";
+import { MIN_PASSAGE_CHARS } from "./constants";
 import { SOURCE_IDS, type SourceId } from "../ingest/sources";
 
 export interface SearchHit {
@@ -137,7 +138,8 @@ export async function search(params: SearchParams): Promise<SearchResponse> {
 
   // Cosine distance is 1 - similarity for L2-normalised vectors, so the
   // threshold becomes a distance ceiling. The source filter is applied inside
-  // the query so it never has to be done client-side.
+  // the query so it never has to be done client-side, as is a floor on passage
+  // length that keeps bare cross-reference links out of the results.
   const rows = await query<RawHit>(
     `SELECT
        c.id                                        AS chunk_id,
@@ -157,9 +159,10 @@ export async function search(params: SearchParams): Promise<SearchResponse> {
      JOIN sources   s ON s.id = c.source
      WHERE (c.embedding <=> $1::vector) <= (1 - $2::float8)
        AND ($3::text IS NULL OR c.source = $3)
+       AND length(c.text) >= $5::int
      ORDER BY c.embedding <=> $1::vector
      LIMIT $4::int`,
-    [literal, threshold, source === "all" ? null : source, limit],
+    [literal, threshold, source === "all" ? null : source, limit, MIN_PASSAGE_CHARS],
   );
 
   const results: SearchHit[] = rows.map((row) => ({

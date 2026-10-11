@@ -91,6 +91,28 @@ function elementLanguage(el: Element): string | null {
   return attribs["data-lang"] ?? attribs["data-language"] ?? null;
 }
 
+/**
+ * Is this section a navigation block rather than documentation?
+ *
+ * Cross-reference blocks ("See Also", "References") are lists of link labels
+ * with no sentence punctuation - PostgreSQL's are frequently a single word
+ * like "VACUUM", though some run to a hundred characters. They score well on
+ * lexical overlap while explaining nothing, so they displace the passage that
+ * actually answers the question.
+ *
+ * Prose always contains sentence punctuation, and a section carrying a code
+ * example is always worth keeping, so both are exempt. Length is only used to
+ * bound the rule; it cannot separate the classes on its own.
+ */
+function isNavigationalOnly(section: Section): boolean {
+  if (section.blocks.some((block) => block.kind === "code")) return false;
+
+  const text = section.blocks.map((block) => block.text).join(" ");
+  if (text.length >= 400) return false;
+
+  return !/[.!?]/.test(text);
+}
+
 /** Version detection from the page title, e.g. "3.15.0 documentation". */
 export function detectVersion(title: string): string | null {
   const patterns = [
@@ -257,7 +279,10 @@ export function extractPage(html: string, pageUrl: string, config: SourceConfig)
     canonicalUrl: canonical,
     title,
     version: detectVersion(documentTitle),
-    sections: sections.filter((s) => s.blocks.length > 0),
+    // Drop navigation-only blocks so they cannot displace real answers.
+    // Individual blocks are never trimmed: a short line inside a real section
+    // ("Deprecated since 3.1.") is meaningful and must survive.
+    sections: sections.filter((section) => !isNavigationalOnly(section)),
   };
 }
 

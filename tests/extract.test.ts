@@ -18,6 +18,13 @@ function html(inner: string): string {
 const url = "https://example.test/page.html";
 const config = { ...SOURCES.python, contentSelectors: ['div[role="main"]'] };
 
+/**
+ * A paragraph long enough to clear MIN_PASSAGE_CHARS. Sections below that
+ * floor are deliberately dropped, so fixtures must use realistic lengths.
+ */
+const PARA = "A dependency is a callable that FastAPI can share across routes.";
+const LONG = "PostgreSQL evaluates the query planner using statistics collected by ANALYZE.";
+
 describe("detectVersion", () => {
   it("reads the Sphinx-style version out of the document title", () => {
     expect(detectVersion("Python 3.15.0 documentation")).toBe("3.15.0");
@@ -36,10 +43,10 @@ describe("extractPage", () => {
   it("builds a nested heading path", () => {
     const page = extractPage(
       html(`
-        <h1 id="top">Top</h1><p>intro</p>
-        <h2 id="second">Second</h2><p>body</p>
-        <h3 id="third">Third</h3><p>more</p>
-        <h2 id="fourth">Fourth</h2><p>tail</p>
+        <h1 id="top">Top</h1><p>${LONG} ${LONG}</p>
+        <h2 id="second">Second</h2><p>${LONG} ${LONG}</p>
+        <h3 id="third">Third</h3><p>${LONG} ${LONG}</p>
+        <h2 id="fourth">Fourth</h2><p>${LONG} ${LONG}</p>
       `),
       url,
       config,
@@ -63,7 +70,7 @@ describe("extractPage", () => {
     ].join("\n");
 
     const page = extractPage(
-      html(`<h1>Dependencies</h1><p>Use it.</p><pre><code>${snippet}</code></pre><p>Done.</p>`),
+      html(`<h1>Dependencies</h1><p>${PARA}</p><pre><code>${snippet}</code></pre><p>${LONG} ${LONG}</p>`),
       url,
       config,
     );
@@ -93,7 +100,7 @@ describe("extractPage", () => {
 
   it("strips the permalink glyph from headings", () => {
     const page = extractPage(
-      html('<h1 id="dep">Dependencies<a class="headerlink" href="#dep">¶</a></h1><p>x</p>'),
+      html(`<h1 id="dep">Dependencies<a class="headerlink" href="#dep">¶</a></h1><p>${LONG} ${LONG}</p>`),
       url,
       config,
     );
@@ -103,13 +110,17 @@ describe("extractPage", () => {
   });
 
   it("prefers the canonical URL when the page declares one", () => {
-    const page = extractPage(html("<h1>T</h1><p>x</p>"), url, config);
+    const page = extractPage(html(`<h1>T</h1><p>${LONG} ${LONG}</p>`), url, config);
     expect(page.canonicalUrl).toBe("https://example.test/page.html");
   });
 
   it("drops sections that ended up with no content", () => {
     const page = extractPage(
-      html("<h1>Empty</h1><h2>Also empty</h2><h3>Real</h3><p>content</p>"),
+      html(`
+        <h1>Empty</h1>
+        <h2>Also empty</h2>
+        <h3>Real</h3><p>${LONG} ${LONG}</p>
+      `),
       url,
       config,
     );
@@ -117,10 +128,41 @@ describe("extractPage", () => {
     expect(page.sections.map((s) => s.title)).toEqual(["Real"]);
   });
 
+  it("drops navigation-only sections such as bare cross-reference links", () => {
+    // PostgreSQL "See Also" blocks are link labels with no sentence
+    // punctuation. They score well on lexical overlap but explain nothing.
+    const page = extractPage(
+      html(`
+        <h1>VACUUM</h1><p>${"The VACUUM command reclaims storage. ".repeat(6)}</p>
+        <h2>See Also</h2><p>ANALYZE</p>
+        <h2>Options</h2><p>${"This option controls how much detail is printed. ".repeat(6)}</p>
+      `),
+      url,
+      config,
+    );
+
+    const titles = page.sections.map((s) => s.title);
+    expect(titles).not.toContain("See Also");
+    expect(titles).toContain("Options");
+  });
+
+  it("keeps a code-only section however short it is", () => {
+    // No prose, no punctuation - but a runnable snippet is the answer.
+    const page = extractPage(
+      html(`<h1>Recipes</h1><p>Run:</p><pre><code>result = db.query(sql)</code></pre>`),
+      url,
+      config,
+    );
+
+    const all = page.sections.flatMap((s) => s.blocks.map((b) => b.text)).join("\n");
+    expect(all).toContain("result = db.query(sql)");
+  });
+
   it("flattens a table into readable rows", () => {
     const page = extractPage(
       html(`
-        <h1>Options</h1>
+        <h1>CREATE INDEX options</h1>
+        <p>${"The following options may be given when creating an index. ".repeat(6)}</p>
         <table><tr><th>Name</th><th>Type</th></tr><tr><td>CONCURRENTLY</td><td>boolean</td></tr></table>
       `),
       url,
