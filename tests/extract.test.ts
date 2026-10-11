@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+﻿import { describe, expect, it } from "vitest";
 import { detectVersion, extractPage } from "../src/ingest/extract";
 import { SOURCES } from "../src/ingest/sources";
 
@@ -175,4 +175,116 @@ describe("extractPage", () => {
   });
 });
 
+describe("content that cannot be usefully indexed", () => {
+  /**
+   * These are not hypothetical. Each fixture is modelled on real content that
+   * shipped in the corpus and had to be removed, because it consumed an index
+   * slot while being unmatchable by any query.
+   */
+
+  it("drops an embedded base64 blob", () => {
+    const blob = "A".repeat(1200);
+    const page = extractPage(
+      html(`
+        <h1>Response class</h1>
+        <p>${"The response class carries the rendered image bytes. ".repeat(6)}</p>
+        <pre><code>image_base64 = "${blob}"</code></pre>
+      `),
+      url,
+      config,
+    );
+
+    const all = page.sections.flatMap((s) => s.blocks.map((b) => b.text)).join("\n");
+    expect(all).not.toContain(blob);
+    // The prose around it survives: only the blob is dropped.
+    expect(all).toContain("rendered image bytes");
+  });
+
+  it("still drops a blob when a syntax highlighter inserts spacing", () => {
+    // Pygments splits the statement into spans and the extractor rejoins them
+    // with spaces, so the real text arrives as: image_base64 = " AAAA..."
+    const blob = "A".repeat(1200);
+    const page = extractPage(
+      html(`
+        <h1>Response class</h1>
+        <p>${"The response class carries the rendered image bytes. ".repeat(6)}</p>
+        <pre><code><span class="n">image_base64</span> <span class="o">=</span> <span class="s2">&quot;${blob}&quot;</span></code></pre>
+      `),
+      url,
+      config,
+    );
+
+    const all = page.sections.flatMap((s) => s.blocks.map((b) => b.text)).join("\n");
+    expect(all).not.toContain(blob);
+    expect(all).toContain("rendered image bytes");
+  });
+
+  it("drops a contributor mention list", () => {
+    const handles = Array.from({ length: 40 }, (_, i) => `@contributor${i}`).join(" ");
+    const page = extractPage(
+      html(`
+        <h1>FastAPI people</h1>
+        <p>${"These are the people who contribute to the project each day. ".repeat(5)}</p>
+        <p>${handles}</p>
+      `),
+      url,
+      config,
+    );
+
+    const all = page.sections.flatMap((s) => s.blocks.map((b) => b.text)).join("\n");
+    expect(all).not.toContain("@contributor39");
+    // The sentence describing them is real documentation and must survive.
+    expect(all).toContain("contribute to the project");
+  });
+
+  it("keeps ordinary prose that happens to mention an account", () => {
+    const page = extractPage(
+      html(`
+        <h1>Support</h1>
+        <p>${"If you need help, ask in the discussion group and mention @tiangolo. ".repeat(5)}</p>
+      `),
+      url,
+      config,
+    );
+
+    const all = page.sections.flatMap((s) => s.blocks.map((b) => b.text)).join("\n");
+    expect(all).toContain("@tiangolo");
+  });
+
+  it("reduces diagram markup to readable text", () => {
+    const page = extractPage(
+      html(`
+        <h1>Behind a proxy</h1>
+        <p>${"FastAPI can run behind a reverse proxy that terminates TLS. ".repeat(6)}</p>
+        <pre><code>sequenceDiagram
+    Client-&gt;&gt;Proxy: HTTPS Request&lt;br/&gt;Host: mysuperapp.com</code></pre>
+      `),
+      url,
+      config,
+    );
+
+    const all = page.sections.flatMap((s) => s.blocks.map((b) => b.text)).join("\n");
+    expect(all).toContain("Client->>Proxy: HTTPS Request");
+    expect(all).toContain("Host: mysuperapp.com");
+    // The markup itself must not reach the index.
+    expect(all).not.toContain("<br/>");
+    expect(all).not.toContain("&gt;");
+  });
+
+  it("keeps code indentation intact", () => {
+    const page = extractPage(
+      html(`
+        <h1>Example</h1>
+        <p>${"The handler below returns a plain dictionary of results. ".repeat(6)}</p>
+        <pre><code>def handler():
+    return {"ok": True}</code></pre>
+      `),
+      url,
+      config,
+    );
+
+    const all = page.sections.flatMap((s) => s.blocks.map((b) => b.text)).join("\n");
+    expect(all).toContain("    return {");
+  });
+});
 void wrap;

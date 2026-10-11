@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { chunkPage, chunkSection, DEFAULT_CHUNK_OPTIONS, estimateTokens } from "../src/ingest/chunk";
+import { chunkPage, chunkSection, DEFAULT_CHUNK_OPTIONS, MAX_CODE_CHARS, estimateTokens } from "../src/ingest/chunk";
 import type { Block, Section } from "../src/ingest/extract";
 
 function text(s: string): Block {
@@ -45,11 +45,32 @@ describe("chunkSection", () => {
   });
 
   it("never splits a code block across chunks", async () => {
-    const long = Array.from({ length: 200 }, (_, i) => `    step_${i} = compute(${i})`).join("\n");
+    // Sized to stay under MAX_CODE_CHARS, so this exercises the ordinary case:
+    // a code sample that fits is emitted whole, never subdivided.
+    const lines = Math.floor(MAX_CODE_CHARS / 26);
+    const long = Array.from({ length: lines }, (_, i) => `    step_${i} = compute(${i})`).join("\n");
+    expect(long.length).toBeLessThanOrEqual(MAX_CODE_CHARS);
+
     const chunks = await chunkSection(section([code(long)]), 0);
 
     expect(chunks).toHaveLength(1);
     expect(chunks[0].pageContent).toBe(long);
+  });
+
+  it("keeps every line of an oversized code block intact", async () => {
+    // The same block, but long enough to exceed MAX_CODE_CHARS. It is now split
+    // at line boundaries - which still satisfies the original promise that a
+    // code block is never cut mid-statement, and is what stops the chunker
+    // storing text the embedding model will silently truncate.
+    const long = Array.from({ length: Math.ceil(MAX_CODE_CHARS / 26) + 40 }, (_, i) => `    step_${i} = compute(${i})`).join("\n");
+    const chunks = await chunkSection(section([code(long)]), 0);
+
+    expect(chunks.length).toBeGreaterThan(1);
+    const lines = chunks.flatMap((c) => c.pageContent.split("\n"));
+    const expected = Math.ceil(MAX_CODE_CHARS / 26) + 40;
+    for (let i = 0; i < expected; i++) {
+      expect(lines).toContain(`    step_${i} = compute(${i})`);
+    }
   });
 
   it("keeps code intact when it sits inside surrounding prose", async () => {
@@ -69,6 +90,8 @@ describe("chunkSection", () => {
   });
 
   it("emits an oversized code block on its own rather than cutting it", async () => {
+    // A single unsplittable line: there is no line boundary to cut at, so the
+    // only safe outcome is to keep it whole and let it stand alone.
     const huge = "x".repeat(DEFAULT_CHUNK_OPTIONS.targetTokens * 4 * 3);
     const chunks = await chunkSection(section([text("lead in"), code(huge)]), 0);
 

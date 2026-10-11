@@ -52,6 +52,68 @@ function normaliseText(text: string): string {
 }
 
 /**
+ * Is this a block of encoded binary rather than readable documentation?
+ *
+ * Documentation sites embed images as inline base64. FastAPI ships one on a
+ * single 4,269-character line, which is the worst case for the chunker: there
+ * is no line boundary to split at, so it cannot be divided without corrupting
+ * it, and nothing would ever match it. It is dropped rather than indexed.
+ *
+ * Deliberately narrow. Real code can contain long unbroken alphanumeric runs,
+ * so the only reliable signal is an explicit data-URI prefix, plus the case
+ * where a single line is enormous and carries no spaces or punctuation at all
+ * - a shape no readable code or prose takes.
+ */
+/**
+ * Is this a block of encoded binary rather than readable documentation?
+ *
+ * Documentation sites embed images as inline base64. FastAPI ships one that
+ * runs to several thousand characters, which is the worst case for the chunker:
+ * no line boundary to split at, so it cannot be divided without corrupting it,
+ * and nothing would ever match it.
+ *
+ * Note this runs on the *rendered* text, not the raw HTML. Pygments splits a
+ * statement into spans, and joining them inserts spaces - so
+ * `image_base64 = "iVBOR..."` reaches the chunker as
+ * `image_base64 = " iVBOR...`. The pattern below tolerates that spacing, which
+ * a shape check on punctuation cannot: by the time the spaces are in, the line
+ * contains `=` and quotes and looks like ordinary code.
+ */
+function isEncodedBlob(text: string): boolean {
+  const trimmed = text.trim();
+  if (trimmed.length < 512) return false;
+  if (/^data:[\w.+-]+;\s*base64,/i.test(trimmed)) return true;
+
+  // Spaces around the assignment and the quote are the syntax highlighter's
+  // doing, so the pattern is matched against the text with all whitespace
+  // removed - which collapses `image_base64 = " iVBOR` to `image_base64="iVBOR`.
+  const squashed = trimmed.replace(/\s+/g, "");
+  return /[a-z0-9_.]*(?:base64|image|img|icon|avatar|png|jpeg|jpg|gif|svg)[a-z0-9_.]*=["'][A-Za-z0-9+/]{512,}={0,2}["']/i.test(
+    squashed,
+  );
+}
+
+/**
+ * Is this a run of bare @mentions or handles with no prose around it?
+ *
+ * FastAPI ships contributor lists that are one long line of `@handle` tokens.
+ * There is no line boundary to split at, and no sentence to retrieve - a query
+ * would have to match a handle to surface it. Left in, it occupies a chunk slot
+ * and, being dense, risks a passage the model will truncate.
+ */
+function isMentionList(text: string): boolean {
+  const trimmed = text.trim();
+  if (trimmed.length < 512) return false;
+  const handles = trimmed.match(/@[\w.-]+/g);
+  if (!handles || handles.length < 8) return false;
+  // Only true if the handles account for essentially all of the text, so an
+  // ordinary paragraph that merely mentions a few accounts is never dropped.
+  // Newlines are allowed: the source wraps these lists across several lines.
+  const covered = handles.join("").length;
+  return covered / trimmed.replace(/\s+/g, "").length > 0.9;
+}
+
+/**
  * Strip the permalink glyph generators append inside heading anchors
  * (MkDocs "Â¶", Sphinx "Â¶", Sphinx "#").
  */
@@ -68,12 +130,33 @@ function cleanHeading(text: string): string {
  * silently alter the code.
  */
 function normaliseCode(text: string): string {
-  return text
+  return cleanDiagramMarkup(text)
     .replace(/\r\n/g, "\n")
     .replace(/\u00a0/g, " ")
     .replace(/^\n+/, "")
     .replace(/[ \t]+$/gm, "")
     .replace(/\s+$/, "");
+}
+
+/**
+ * Reduce embedded markup in diagram sources to readable text.
+ *
+ * Mermaid diagrams are stored in the page as source text with HTML inline for
+ * line breaks (`<br/>`), which lands in the index as literal tags. Those tags
+ * are noise to a sentence encoder - they cost word-pieces and shift the
+ * embedding away from the diagram's actual meaning - and `<br/>` is a line
+ * break in every language the diagrams are written in.
+ *
+ * Only the tags inside these blocks are touched. Anything that looks like
+ * genuine markup in a `<pre>` is unusual enough that removing the tag and
+ * keeping its text is still the better outcome for a text index.
+ */
+function cleanDiagramMarkup(text: string): string {
+  if (!/<\/?[a-z][^>]*>/i.test(text)) return text;
+  return text
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/?(?:b|i|em|u|strong|code|span|font|div|p|sub|sup)\b[^>]*>/gi, "")
+    .replace(/&nbsp;/g, " ");
 }
 
 function pickRoot($: cheerio.CheerioAPI, selectors: string[]): cheerio.Cheerio<never> {
@@ -153,8 +236,12 @@ export function extractPage(html: string, pageUrl: string, config: SourceConfig)
 
   const flushInline = () => {
     if (inlineBuffer.length === 0) return;
-    const text = normaliseText(inlineBuffer.join(" "));
+    const inlineText = inlineBuffer.join(" ");
     inlineBuffer = [];
+    // Contributor lists reach here as prose rather than as a <pre>, so the
+    // mention filter has to run on this path too.
+    if (isMentionList(inlineText)) return;
+    const text = normaliseText(inlineText);
     if (!text) return;
     if (!current) {
       current = { headingPath: [], title, anchor: "", blocks: [] };
@@ -166,7 +253,7 @@ export function extractPage(html: string, pageUrl: string, config: SourceConfig)
   const pushCode = (el: Element) => {
     flushInline();
     const $el = scope.find(el as never);
-    const text = normaliseCode($el.text());
+    const text = normaliseCode(isEncodedBlob($el.text()) || isMentionList($el.text()) ? "" : $el.text());
     if (!text) return;
     if (!current) {
       current = { headingPath: [], title, anchor: "", blocks: [] };
@@ -237,7 +324,12 @@ export function extractPage(html: string, pageUrl: string, config: SourceConfig)
     }
     if (tag === "p") {
       flushInline();
-      const text = normaliseText(scope.find(element as never).text());
+      const raw = scope.find(element as never).text();
+      // A whole paragraph arrives here rather than through the inline buffer,
+      // so the mention filter has to run on this path too. FastAPI's
+      // contributor list is exactly this shape.
+      if (isMentionList(raw)) return;
+      const text = normaliseText(raw);
       if (text) {
         if (!current) {
           current = { headingPath: [], title, anchor: "", blocks: [] };
