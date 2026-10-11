@@ -122,10 +122,11 @@ Dependencies" — instead of "somewhere on a long page".
 word-piece position limit. Measured against the real tokenizer, a 1,280-character
 chunk of documentation prose is roughly 340 word-pieces — so the tail would be
 truncated before embedding and could never be matched by a query. Chunks are
-therefore sized at ~800 characters. Prose is split at sentence boundaries;
-**code blocks are never split**, and one larger than the target becomes its own
-passage rather than being cut. `tests/chunk-model-fit.test.ts` measures this
-against the actual tokenizer so the limit cannot silently regress.
+therefore sized at ~800 characters. Prose is split with LangChain's
+`RecursiveCharacterTextSplitter`; **code blocks are never split**, and one larger
+than the target becomes its own passage rather than being cut.
+`tests/chunk-model-fit.test.ts` measures this against the actual tokenizer so
+the limit cannot silently regress.
 
 **Discovery caps are never applied silently.** Each source has a `maxPages`
 limit, and if discovery finds more pages than the limit allows, ingestion warns
@@ -215,6 +216,53 @@ Measured against the deployed function (Vercel Hobby, `iad1`, Neon in
 
 The cold start is the embedding model being read from the function bundle. It
 is paid once per instance and then amortised across warm requests.
+
+---
+
+## What LangChain is used for, and what it isn't
+
+This project uses LangChain, but deliberately not the `langchain` umbrella
+package. That package pulls in **LangGraph** — a stateful agent and workflow
+orchestration engine — which has nothing to contribute to a retrieval-only
+index. Depending on `@langchain/textsplitters` and `@langchain/core` directly
+gets the parts that help without the agent framework:
+
+```
+langchain (umbrella)   -> langgraph, langsmith, js-tiktoken, zod, ...   56 MB
+@langchain/textsplitters
+  + @langchain/core    -> langsmith, js-tiktoken, zod                    44 MB
+                        (no langgraph)
+```
+
+**Used:** `RecursiveCharacterTextSplitter` replaces a hand-rolled regex that
+divided prose on sentence boundaries. It walks a hierarchy of separators —
+paragraph, line, sentence, clause, word — and only hard-cuts once every
+separator is exhausted, which is more robust and better tested than what it
+replaced. Chunks are emitted as LangChain `Document` objects (`pageContent` +
+`metadata`), so the index is interchangeable with any LangChain vector store or
+retriever if that is ever wanted.
+
+**Not used, deliberately:**
+
+- **The umbrella `langchain` package**, because it drags in LangGraph.
+- **Any vector store wrapper.** `PGVector` would hide the SQL that pushes the
+  relevance threshold and source filter *into* the query. For a tool whose
+  entire premise is showing exactly what was retrieved and why, that SQL is
+  worth reading.
+- **Any LLM.** LangChain does not force one in the retrieval path, and none is
+  used here. `HuggingFaceTransformersEmbeddings` would only wrap the same
+  transformers.js call the code already makes.
+
+`LANGSMITH_TRACING` is not set and LangSmith tracing is never enabled, so the
+`langsmith` package that ships as a transitive dependency stays inert.
+
+### It costs the deployment nothing
+
+The embedding runtime and LangChain are used in different halves of the system.
+The search function embeds a query and runs SQL; it never chunks a document.
+Chunking runs only in the local ingestion CLI, which is never bundled. Measured
+after adding LangChain, the traced function payload is **unchanged at 88.6 MB**,
+and `node_modules/@langchain/**` does not appear in it at all.
 
 ---
 

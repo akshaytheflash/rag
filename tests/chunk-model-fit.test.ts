@@ -35,29 +35,30 @@ describe("chunk size versus the model's position limit", () => {
     expect(DEFAULT_CHUNK_OPTIONS.targetTokens).toBeLessThanOrEqual(MAX_TOKENS);
   });
 
-  it("does not truncate a full-size prose chunk", () => {
+  it("does not truncate a full-size prose chunk", async () => {
     const targetChars = DEFAULT_CHUNK_OPTIONS.targetTokens * 4;
     // A chunk at the size limit, made of text that tokenises like real docs.
     const paragraph = "In FastAPI a dependency is a callable shared across routes. ".repeat(60);
-    const chunk = chunkSection(proseSection([paragraph.slice(0, targetChars)]), 0)[0];
+    const chunks = await chunkSection(proseSection([paragraph.slice(0, targetChars)]), 0);
 
-    const pieces = tokenizer.encode(chunk.text).length;
-    expect(pieces).toBeLessThanOrEqual(MAX_TOKENS);
+    for (const chunk of chunks) {
+      expect(tokenizer.encode(chunk.pageContent).length).toBeLessThanOrEqual(MAX_TOKENS);
+    }
   });
 
-  it("splits a long paragraph on a sentence boundary rather than truncating it", () => {
+  it("splits a long paragraph on a sentence boundary rather than truncating it", async () => {
     // A single paragraph far larger than one chunk. The marker sits at the
     // very end, so if the chunker cut or dropped the overflow it would vanish.
     const marker = "The very last sentence of this section mentions ZEBRAFISH.";
     const filler = "The dependency is declared with Depends and shared across routes. ".repeat(120);
 
-    const chunks = chunkSection(proseSection([filler + marker]), 0);
-    const joined = chunks.map((c) => c.text).join("\n");
+    const chunks = await chunkSection(proseSection([filler + marker]), 0);
+    const joined = chunks.map((c) => c.pageContent).join("\n");
 
     expect(chunks.length).toBeGreaterThan(1);
     expect(joined).toContain(marker);
     for (const chunk of chunks) {
-      expect(tokenizer.encode(chunk.text).length).toBeLessThanOrEqual(MAX_TOKENS);
+      expect(tokenizer.encode(chunk.pageContent).length).toBeLessThanOrEqual(MAX_TOKENS);
     }
   });
 

@@ -130,7 +130,7 @@ export async function ingestSource(
       const occurrence = anchorSeen.get(base) ?? 0;
       anchorSeen.set(base, occurrence + 1);
 
-      const doc = prepareDocument(config.id, page, section, chunkOptions, occurrence);
+      const doc = await prepareDocument(config.id, page, section, chunkOptions, occurrence);
       if (doc.chunks.length > 0) prepared.push(doc);
     }
   }

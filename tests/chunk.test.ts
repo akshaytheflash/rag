@@ -21,48 +21,63 @@ describe("estimateTokens", () => {
   });
 });
 
+describe("chunk records are LangChain Documents", () => {
+  it("carries the passage in pageContent and provenance in metadata", async () => {
+    const chunks = await chunkSection(section([text("A short paragraph about dependencies.")]), 0);
+
+    expect(chunks).toHaveLength(1);
+    const chunk = chunks[0];
+    expect(chunk.pageContent).toBe("A short paragraph about dependencies.");
+    expect(chunk.metadata).toMatchObject({
+      ordinal: 0,
+      headingPath: ["Guide", "A section"],
+    });
+    expect(chunk.tokenEstimate).toBe(estimateTokens(chunk.pageContent));
+  });
+});
+
 describe("chunkSection", () => {
-  it("keeps short sections as a single chunk", () => {
-    const chunks = chunkSection(section([text("A short paragraph about dependencies.")]), 0);
+  it("keeps short sections as a single chunk", async () => {
+    const chunks = await chunkSection(section([text("A short paragraph about dependencies.")]), 0);
     expect(chunks).toHaveLength(1);
     expect(chunks[0].ordinal).toBe(0);
     expect(chunks[0].headingPath).toEqual(["Guide", "A section"]);
   });
 
-  it("never splits a code block across chunks", () => {
+  it("never splits a code block across chunks", async () => {
     const long = Array.from({ length: 200 }, (_, i) => `    step_${i} = compute(${i})`).join("\n");
-    const chunks = chunkSection(section([code(long)]), 0);
+    const chunks = await chunkSection(section([code(long)]), 0);
 
     expect(chunks).toHaveLength(1);
-    expect(chunks[0].text).toBe(long);
+    expect(chunks[0].pageContent).toBe(long);
   });
 
-  it("keeps code intact when it sits inside surrounding prose", () => {
-    const snippet = "from typing import Annotated\n\n\ndef common(q: str | None = None):\n    if q:\n        return q\n    return q";
-    const chunks = chunkSection(
+  it("keeps code intact when it sits inside surrounding prose", async () => {
+    const snippet =
+      "from typing import Annotated\n\n\ndef common(q: str | None = None):\n    if q:\n        return q\n    return q";
+    const chunks = await chunkSection(
       section([text("Intro."), code(snippet), text("Outro.")]),
       0,
     );
 
-    const joined = chunks.map((c) => c.text).join("\n");
+    const joined = chunks.map((c) => c.pageContent).join("\n");
     expect(joined).toContain("def common(q: str | None = None):");
     expect(joined).toContain("    if q:");
-    // Every line of the snippet survives intact somewhere in the output.
     for (const line of snippet.split("\n")) {
       expect(joined.split("\n")).toContain(line);
     }
   });
 
-  it("emits an oversized code block on its own rather than cutting it", () => {
+  it("emits an oversized code block on its own rather than cutting it", async () => {
     const huge = "x".repeat(DEFAULT_CHUNK_OPTIONS.targetTokens * 4 * 3);
-    const chunks = chunkSection(section([text("lead in"), code(huge)]), 0);
+    const chunks = await chunkSection(section([text("lead in"), code(huge)]), 0);
 
     expect(chunks).toHaveLength(2);
-    expect(chunks.some((c) => c.text === huge)).toBe(true);
+    expect(chunks.some((c) => c.pageContent === huge)).toBe(true);
   });
 
-  it("numbers ordinals densely and in order", () => {
-    const chunks = chunkSection(
+  it("numbers ordinals densely and in order", async () => {
+    const chunks = await chunkSection(
       section([
         text("one ".repeat(400)),
         text("two ".repeat(400)),
@@ -76,9 +91,8 @@ describe("chunkSection", () => {
     chunks.forEach((chunk, i) => expect(chunk.ordinal).toBe(i));
   });
 
-  it("does not emit a runt trailing chunk", () => {
-    // A full chunk followed by a couple of leftover words.
-    const chunks = chunkSection(
+  it("does not emit a runt trailing chunk", async () => {
+    const chunks = await chunkSection(
       section([text("filler ".repeat(1500)), text("end.")]),
       0,
       { ...DEFAULT_CHUNK_OPTIONS, targetTokens: 200 },
@@ -88,8 +102,8 @@ describe("chunkSection", () => {
     expect(last.tokenEstimate).toBeGreaterThanOrEqual(DEFAULT_CHUNK_OPTIONS.minTokens);
   });
 
-  it("carries the heading path onto every chunk so results can be cited", () => {
-    const chunks = chunkSection(
+  it("carries the heading path onto every chunk so results can be cited", async () => {
+    const chunks = await chunkSection(
       section([text("a ".repeat(2000)), text("b ".repeat(2000))], ["Tutorial", "Dependencies"]),
       0,
     );
@@ -97,24 +111,25 @@ describe("chunkSection", () => {
     expect(chunks.length).toBeGreaterThan(1);
     for (const chunk of chunks) {
       expect(chunk.headingPath).toEqual(["Tutorial", "Dependencies"]);
+      expect(chunk.metadata.headingPath).toEqual(["Tutorial", "Dependencies"]);
     }
   });
 });
 
 describe("chunkPage", () => {
-  it("numbers continuously across sections", () => {
+  it("numbers continuously across sections", async () => {
     const page: Section[] = [
-      { headingPath: ["A"], title: "A", anchor: "a", blocks: [text("alpha " .repeat(300))] },
-      { headingPath: ["B"], title: "B", anchor: "b", blocks: [text("beta " .repeat(300))] },
-      { headingPath: ["C"], title: "C", anchor: "c", blocks: [text("gamma " .repeat(300))] },
+      { headingPath: ["A"], title: "A", anchor: "a", blocks: [text("alpha ".repeat(300))] },
+      { headingPath: ["B"], title: "B", anchor: "b", blocks: [text("beta ".repeat(300))] },
+      { headingPath: ["C"], title: "C", anchor: "c", blocks: [text("gamma ".repeat(300))] },
     ];
 
-    const chunks = chunkPage(page);
+    const chunks = await chunkPage(page);
     expect(chunks.length).toBeGreaterThanOrEqual(3);
     chunks.forEach((chunk, i) => expect(chunk.ordinal).toBe(i));
   });
 
-  it("returns nothing for a page with no sections", () => {
-    expect(chunkPage([])).toEqual([]);
+  it("returns nothing for a page with no sections", async () => {
+    expect(await chunkPage([])).toEqual([]);
   });
 });

@@ -1,14 +1,20 @@
 /**
  * Splits a section into retrievable passages.
  *
- * Invariants:
+ * Prose splitting is delegated to LangChain's RecursiveCharacterTextSplitter,
+ * which walks a hierarchy of separators (paragraph, line, sentence, word) and
+ * only ever falls back to a hard cut once every separator is exhausted. That
+ * is strictly better than a hand-rolled regex at keeping sentences intact.
+ *
+ * Two things LangChain's splitter does not know about, and which this module
+ * therefore still owns:
  *   - A code block is never split. If a code block alone exceeds the target
  *     size it becomes its own chunk rather than being cut mid-statement.
  *   - Every chunk carries the full heading path, so a result can be cited
  *     without re-reading the page.
- *   - Consecutive chunks from the same section overlap slightly, so a sentence
- *     that straddles a boundary is still fully retrievable.
  */
+import { RecursiveCharacterTextSplitter } from "@langchain/textsplitters";
+import { Document } from "@langchain/core/documents";
 import type { Block, Section } from "./extract";
 
 export interface ChunkOptions {
@@ -44,11 +50,29 @@ export function estimateTokens(text: string): number {
   return Math.ceil(text.length / 4);
 }
 
-export interface ChunkRecord {
+/**
+ * A retrievable passage, shaped as a LangChain Document so the index is
+ * interchangeable with any LangChain vector store or retriever.
+ *
+ * Provenance lives in `metadata`; the passage text itself is `pageContent`.
+ */
+export type ChunkRecord = Document & {
   ordinal: number;
   headingPath: string[];
-  text: string;
   tokenEstimate: number;
+};
+
+function makeChunk(
+  text: string,
+  ordinal: number,
+  headingPath: string[],
+): ChunkRecord {
+  const doc = new Document({ pageContent: text, metadata: { ordinal, headingPath } });
+  return Object.assign(doc, {
+    ordinal,
+    headingPath,
+    tokenEstimate: estimateTokens(text),
+  });
 }
 
 function renderBlocks(blocks: Block[]): string {
@@ -65,37 +89,38 @@ function renderBlocks(blocks: Block[]): string {
  * Only prose is split. A code block that is larger than the target is kept
  * whole, because cutting a code sample mid-statement is exactly the damage
  * this pipeline exists to avoid.
+ *
+ * Lengths are handled in characters rather than tokens: the splitter's
+ * lengthFunction is the unit, and estimateTokens() is a fixed chars/4 ratio,
+ * so splitting here and packing there stay consistent.
+ *
+ * The splitter's own overlap is zero. Overlap is applied once, at chunk
+ * boundaries, by overlapTail() below - leaving both in place would duplicate
+ * text inside a chunk and dilute its embedding.
  */
-function splitProse(text: string, limit: number): string[] {
+async function splitProse(text: string, limit: number): Promise<string[]> {
   if (text.length <= limit) return [text];
 
-  const sentences = text.match(/[^.!?\n]*[.!?]+\s*|[^.!?\n]+\n?/g) ?? [text];
-  const parts: string[] = [];
-  let buffer = "";
+  const splitter = new RecursiveCharacterTextSplitter({
+    chunkSize: limit,
+    chunkOverlap: 0,
+    // Walk down from the most semantic boundary to the least. Keeping the
+    // separator attached means a chunk still ends mid-sentence only when
+    // nothing else fits.
+    separators: ["\n\n", "\n", ". ", "? ", "! ", "; ", ", ", " ", ""],
+    keepSeparator: true,
+    lengthFunction: (value: string) => value.length,
+  });
 
-  for (const sentence of sentences) {
-    if (buffer && buffer.length + sentence.length > limit) {
-      parts.push(buffer.trimEnd());
-      buffer = "";
-    }
-    buffer += sentence;
-
-    // A single sentence longer than the limit still has to be cut somewhere.
-    while (buffer.length > limit) {
-      parts.push(buffer.slice(0, limit));
-      buffer = buffer.slice(limit);
-    }
-  }
-
-  if (buffer.trim()) parts.push(buffer.trimEnd());
-  return parts.filter((p) => p.length > 0);
+  const parts = await splitter.splitText(text);
+  return parts.filter((part) => part.trim().length > 0);
 }
 
 /**
  * Pack blocks into chunks up to the token target, keeping code atomic.
  * Returns blocks grouped by chunk.
  */
-function packBlocks(blocks: Block[], targetChars: number): Block[][] {
+async function packBlocks(blocks: Block[], targetChars: number): Promise<Block[][]> {
   const groups: Block[][] = [];
   let current: Block[] = [];
   let size = 0;
@@ -111,7 +136,7 @@ function packBlocks(blocks: Block[], targetChars: number): Block[][] {
   for (const block of blocks) {
     // Prose is subdivided at sentence boundaries; code is never subdivided.
     const pieces =
-      block.kind === "text" ? splitProse(block.text, targetChars) : [block.text];
+      block.kind === "text" ? await splitProse(block.text, targetChars) : [block.text];
 
     for (const piece of pieces) {
       const blockSize = piece.length;
@@ -147,13 +172,13 @@ function overlapTail(text: string, overlapChars: number): string {
   return window.trim();
 }
 
-export function chunkSection(
+export async function chunkSection(
   section: Section,
   ordinalStart: number,
   options: ChunkOptions = DEFAULT_CHUNK_OPTIONS,
-): ChunkRecord[] {
+): Promise<ChunkRecord[]> {
   const targetChars = options.targetTokens * 4;
-  const groups = packBlocks(section.blocks, targetChars);
+  const groups = await packBlocks(section.blocks, targetChars);
   const out: ChunkRecord[] = [];
 
   let carry = "";
@@ -167,12 +192,7 @@ export function chunkSection(
     }
     if (!text) continue;
 
-    out.push({
-      ordinal: ordinal++,
-      headingPath: section.headingPath,
-      text,
-      tokenEstimate: estimateTokens(text),
-    });
+    out.push(makeChunk(text, ordinal++, section.headingPath));
 
     carry = overlapTail(text, options.overlapChars);
   }
@@ -186,8 +206,12 @@ export function chunkSection(
     if (last.tokenEstimate >= options.minTokens) break;
 
     if (prev.tokenEstimate + last.tokenEstimate <= options.targetTokens * 1.5) {
-      prev.text = `${prev.text}\n\n${last.text}`;
-      prev.tokenEstimate = estimateTokens(prev.text);
+      const merged = `${prev.pageContent}\n\n${last.pageContent}`;
+      Object.assign(prev, {
+        pageContent: merged,
+        tokenEstimate: estimateTokens(merged),
+      });
+      prev.metadata = { ...prev.metadata, pageContent: merged };
       out.pop();
     } else {
       // The previous chunk is already full; a 2-token fragment adds noise to
@@ -211,13 +235,13 @@ export interface PageChunking {
 }
 
 /** Chunks an entire page, numbering continuously across its sections. */
-export function chunkPage(
+export async function chunkPage(
   sections: Section[],
   options: ChunkOptions = DEFAULT_CHUNK_OPTIONS,
-): ChunkRecord[] {
+): Promise<ChunkRecord[]> {
   const all: ChunkRecord[] = [];
   for (const section of sections) {
-    all.push(...chunkSection(section, all.length, options));
+    all.push(...(await chunkSection(section, all.length, options)));
   }
   return all;
 }
