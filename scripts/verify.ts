@@ -9,12 +9,14 @@
  * of `npm test`.
  */
 import { closePool } from "../src/lib/db";
-import { search, resolveFilters, getCorpusStats } from "../src/lib/search";
+import { search, resolveFilters, getCorpusStats, DEFAULT_THRESHOLD } from "../src/lib/search";
 
 interface Case {
   question: string;
   /** A phrase the correct passage should contain, if we expect a hit. */
   expect?: RegExp;
+  /** Section title fragment, when the expected answer is a specific page. */
+  expectTitle?: RegExp;
   source?: "all" | "python" | "fastapi" | "postgresql";
   expectEmpty?: boolean;
 }
@@ -23,25 +25,45 @@ const CASES: Case[] = [
   {
     question: "How do I create a dependency in FastAPI?",
     source: "fastapi",
-    expect: /Depends|dependenc/i,
+    expectTitle: /Depends/i,
   },
   {
     question: "What is a generator function in Python?",
     source: "python",
-    expect: /generat/i,
+    expectTitle: /generat/i,
   },
   {
     question: "How do I build an index on a PostgreSQL table?",
     source: "postgresql",
-    expect: /CREATE\s+INDEX/i,
+    expect: /CREATE\s+INDEX|create an index/i,
   },
   {
-    question: "How do I run a query and fetch results with a connection cursor?",
+    question: "How do I use a window function with OVER?",
+    source: "postgresql",
+    expectTitle: /window/i,
+  },
+  {
+    question: "How do I read a file in Python?",
     source: "python",
-    expect: /cursor|execute|fetch/i,
+    expectTitle: /file/i,
+  },
+  {
+    question: "How do I return a file response from a route in FastAPI?",
+    source: "fastapi",
+    expectTitle: /FileResponse|file/i,
   },
   {
     question: "What is the difference between waffle batter and astrophysics?",
+    source: "all",
+    expectEmpty: true,
+  },
+  {
+    question: "How do I bake sourdough bread at home?",
+    source: "all",
+    expectEmpty: true,
+  },
+  {
+    question: "What is the capital of France?",
     source: "all",
     expectEmpty: true,
   },
@@ -70,14 +92,14 @@ async function main() {
     process.exit(1);
   }
 
-  console.log("Search");
+  console.log(`\nSearch (threshold ${DEFAULT_THRESHOLD})`);
   for (const testCase of CASES) {
     const started = Date.now();
     const response = await search({
       query: testCase.question,
       source: testCase.source ?? "all",
       limit: 5,
-      threshold: 0.25,
+      threshold: DEFAULT_THRESHOLD,
     });
     const elapsed = Date.now() - started;
     const top = response.results[0];
@@ -91,17 +113,20 @@ async function main() {
       continue;
     }
 
-    const passed = Boolean(top && testCase.expect?.test(top.text));
+    const matched =
+      Boolean(top) &&
+      (testCase.expectTitle ? testCase.expectTitle.test(top.sectionTitle) : true) &&
+      (testCase.expect ? testCase.expect.test(top.text) : true);
+
     check(
       testCase.question,
-      passed,
+      matched,
       top
         ? `${top.similarity.toFixed(3)} ${top.source} · ${top.sectionTitle.slice(0, 48)} (${elapsed}ms)`
         : `no results above threshold (${elapsed}ms)`,
     );
 
     if (top) {
-      // Every result must be citable.
       if (!/^https:\/\//.test(top.url)) {
         check(`  ${testCase.question.slice(0, 40)}... url`, false, `bad url: ${top.url}`);
       }

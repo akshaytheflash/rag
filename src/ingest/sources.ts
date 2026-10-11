@@ -132,7 +132,11 @@ export const SOURCES: Record<SourceId, SourceConfig> = {
     ],
     headingSelector: "h1, h2, h3",
     license: "PostgreSQL License",
-    crawl: { maxPages: 500, concurrency: 4, delayMs: 150 },
+    // The PostgreSQL manual is large: the narrative chapters are only part of
+    // it, and the sql-*.html reference pages (CREATE INDEX, ALTER TABLE, and
+    // every other command) sort last alphabetically. Capping this low silently
+    // drops the entire SQL Commands reference.
+    crawl: { maxPages: 1500, concurrency: 4, delayMs: 150 },
   },
 };
 

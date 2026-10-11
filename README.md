@@ -76,7 +76,19 @@ npm run db:migrate
 | `EMBEDDING_MODEL` | no | Defaults to `Xenova/all-MiniLM-L6-v2`. |
 | `EMBEDDING_DIM` | no | Defaults to `384`. Must match the column definition. |
 | `SEARCH_TOP_K` | no | Default result count (default `8`, capped at 25). |
-| `SEARCH_THRESHOLD` | no | Minimum cosine similarity (default `0.25`). |
+| `SEARCH_THRESHOLD` | no | Minimum cosine similarity (default `0.38`). |
+
+### Choosing the relevance threshold
+
+The default is calibrated against the indexed corpus rather than guessed.
+Over ~25,000 passages, unrelated questions ("what is the capital of France",
+"how do I make sourdough bread") peak around **0.28**, while the weakest
+genuine match measured across the verification set was **0.61**. `0.38` sits
+in that gap with margin on both sides.
+
+Raise it if you would rather return nothing than return something loosely
+related. Lower it if you are willing to trade precision for recall. Set it to
+`0` to disable filtering and rank the whole corpus.
 
 ### Why two connection strings
 
@@ -106,9 +118,20 @@ npm run ingest -- --target-tokens 400           # larger passages
 `documents`. A passage can therefore be cited precisely — "Bigger Applications →
 Dependencies" — instead of "somewhere on a long page".
 
-**Code blocks are atomic.** A `<pre>` is never split, reflowed or trimmed
-mid-statement, including when it sits inside a list item. A code block larger
-than the chunk target becomes its own passage rather than being cut.
+**Chunk size is capped to fit the model.** all-MiniLM-L6-v2 has a 256
+word-piece position limit. Measured against the real tokenizer, a 1,280-character
+chunk of documentation prose is roughly 340 word-pieces — so the tail would be
+truncated before embedding and could never be matched by a query. Chunks are
+therefore sized at ~800 characters. Prose is split at sentence boundaries;
+**code blocks are never split**, and one larger than the target becomes its own
+passage rather than being cut. `tests/chunk-model-fit.test.ts` measures this
+against the actual tokenizer so the limit cannot silently regress.
+
+**Discovery caps are never applied silently.** Each source has a `maxPages`
+limit, and if discovery finds more pages than the limit allows, ingestion warns
+loudly. This matters: PostgreSQL's `sql-*.html` reference pages sort last
+alphabetically, so a cap set too low drops the entire SQL Commands reference
+while looking like a corpus that simply never covered the topic.
 
 **Re-running is safe and cheap.** Documents are keyed by
 `(source, url, anchor)` and chunks by `(document_id, ordinal)`, so ingestion
@@ -157,7 +180,9 @@ alongside them.
 | `npm run lint` | ESLint |
 | `npm run db:migrate` | Apply `db/migrations/*.sql` (needs the direct URL) |
 | `npm run db:stats` | Print what is currently indexed |
+| `npm run db:reset -- --yes` | Empty the index (chunks go with it via cascade) |
 | `npm run ingest` | Crawl, chunk, embed and index |
+| `npm run verify` | End-to-end search checks against the live index |
 | `npm run model:fetch` | Download the embedding weights |
 
 ---

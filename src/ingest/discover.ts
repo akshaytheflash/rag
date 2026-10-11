@@ -133,5 +133,16 @@ export async function discoverPages(config: SourceConfig): Promise<string[]> {
   }
 
   permitted.sort();
+
+  // Never truncate silently. A cap that bites looks exactly like a corpus
+  // that simply does not cover the topic.
+  if (permitted.length > config.crawl.maxPages) {
+    console.warn(
+      `  ! ${config.label}: found ${permitted.length} pages but the cap is ` +
+        `${config.crawl.maxPages}. Raise crawl.maxPages in src/ingest/sources.ts, ` +
+        `or part of the documentation will be missing from the index.`,
+    );
+  }
+
   return permitted.slice(0, config.crawl.maxPages);
 }
