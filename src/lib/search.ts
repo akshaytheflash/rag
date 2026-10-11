@@ -10,7 +10,6 @@
  * is a ranking signal, not a measure of correctness.
  */
 import { query } from "./db";
-import { embedOne, toVectorLiteral } from "./embed";
 import { optionalEnvNumber } from "./env";
 import { MIN_PASSAGE_CHARS } from "./constants";
 import { SOURCE_IDS, type SourceId } from "../ingest/sources";
@@ -132,6 +131,12 @@ export async function search(params: SearchParams): Promise<SearchResponse> {
   const source = params.source ?? "all";
   const limit = Math.min(MAX_LIMIT, Math.max(1, params.limit ?? DEFAULT_LIMIT));
   const threshold = params.threshold ?? DEFAULT_THRESHOLD;
+
+  // Loaded on demand. The embedding stack pulls in onnxruntime and a 22 MB
+  // model, and the landing page only needs the corpus counts - importing it at
+  // module scope would make every page render pay for it, and fail entirely
+  // if the native runtime is unavailable.
+  const { embedOne, toVectorLiteral } = await import("./embed");
 
   const vector = await embedOne(params.query);
   const literal = toVectorLiteral(vector);
