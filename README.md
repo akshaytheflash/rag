@@ -185,6 +185,37 @@ alongside them.
 | `npm run verify` | End-to-end search checks against the live index |
 | `npm run model:fetch` | Download the embedding weights |
 
+### What is currently indexed
+
+| Manual | Version | Pages | Sections | Passages |
+|---|---|---|---|---|
+| Python | 3.15.0 | 456 | 4,791 | 16,318 |
+| FastAPI | — | 148 | 1,607 | 2,782 |
+| PostgreSQL | 18.6 | 1,148 | 6,237 | 8,461 |
+| **Total** | | **1,752** | **12,635** | **33,878** |
+
+`npm run db:stats` prints the live figures. A full ingest takes roughly two
+hours on a laptop, almost all of it CPU spent embedding passages; re-running
+against unchanged documentation is far quicker because only changed content is
+re-embedded.
+
+FastAPI shows no version because the site does not put one in the page title,
+and guessing would be worse than leaving it blank.
+
+## Query performance
+
+Measured against the deployed function (Vercel Hobby, `iad1`, Neon in
+`us-east-2`):
+
+| | |
+|---|---|
+| Cold start, including loading the model | ~2.5 s |
+| Warm query | ~350–650 ms |
+| Empty result set | ~0.5–0.9 s |
+
+The cold start is the embedding model being read from the function bundle. It
+is paid once per instance and then amortised across warm requests.
+
 ---
 
 ## Deployment
@@ -199,9 +230,20 @@ Set `DATABASE_URL` in the Vercel project's environment variables — either in t
 dashboard, or with `vercel env add DATABASE_URL production`, which prompts for
 the value in your terminal so it never passes through a log or a chat.
 
-`next.config.ts` sets `outputFileTracingIncludes` so the ONNX weights are traced
-into the serverless function. Without it the function would look for the model
-at runtime and fail.
+`next.config.ts` sets `outputFileTracingIncludes` so the model weights and the
+ONNX runtime are traced into the serverless function. Two things there are easy
+to get wrong:
+
+- The native library is loaded through a *dynamic* `require` on
+  `process.platform` / `process.arch`, so the tracer cannot follow it. Only the
+  Linux x64 build is included by hand; the darwin, win32 and arm64 builds are
+  ~240 MB of dead weight that would breach the bundle limit.
+- `@huggingface/transformers` is listed in `serverExternalPackages`, which also
+  stops the tracer from following into `onnxruntime-node` — so that package has
+  to be included explicitly as well, not just its binaries.
+
+The embedding stack is imported lazily inside `search()` so that rendering the
+landing page never loads onnxruntime or the model.
 
 Only the pooled `DATABASE_URL` is needed in production. Ingestion and migrations
 are local operations and never run on Vercel.
@@ -223,9 +265,17 @@ terms without notice.
 **Neon Free**
 - 0.5 GB storage, 100 compute-hours/month, autoscaling to 2 CU.
 - **Scale to zero after 5 minutes idle.** The first query after an idle period
-  pays a cold start of a few hundred milliseconds. This is the single most
-  user-visible rough edge of the deployment.
-- Ingesting the full corpus is roughly 30–60 MB, well inside the storage limit.
+  pays a cold start of a few hundred milliseconds on top of the model load.
+  This is the single most user-visible rough edge of the deployment.
+- The indexed corpus currently occupies about **161 MB**, roughly a third of
+  the storage allowance. Room for several times the current documentation
+  before it becomes a constraint.
+
+**Function size**
+
+The deployed function traces to about **89 MB** uncompressed, against Vercel's
+250 MB limit. Almost all of it is the ONNX runtime for Linux x64 (44 MB) and
+the int8 model (22 MB).
 
 **If the demo gets real traffic**, the first thing to break will be Vercel's CPU
 hour budget, then Neon's compute hours. Both are fixable by moving ingestion to
