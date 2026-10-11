@@ -1,0 +1,13 @@
+# Normalise text to LF in the repository; check out per platform.
+* text=auto eol=lf
+
+# The embedding weights are binary. Without this, a platform with different
+# line-ending settings could corrupt the ONNX file and break inference.
+*.onnx -text
+*.bin -text
+*.wasm -text
+
+*.png binary
+*.jpg binary
+*.ico binary
+*.pdf binary

@@ -1,0 +1,46 @@
+{
+  "name": "docsearch",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Semantic search over the official Python, FastAPI and PostgreSQL documentation. Retrieval only - no LLM.",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "model:fetch": "tsx scripts/fetch-model.ts",
+    "db:migrate": "tsx scripts/migrate.ts",
+    "db:reset": "tsx scripts/reset.ts",
+    "ingest": "tsx src/ingest/cli.ts",
+    "db:stats": "tsx scripts/stats.ts",
+    "verify": "tsx scripts/verify.ts"
+  },
+  "dependencies": {
+    "@huggingface/transformers": "4.3.1",
+    "@vercel/functions": "^3.9.11",
+    "cheerio": "1.2.0",
+    "next": "16.4.0",
+    "pg": "^8.23.1",
+    "react": "19.3.0",
+    "react-dom": "19.3.0"
+  },
+  "devDependencies": {
+    "@eslint/eslintrc": "^3.3.7",
+    "@types/node": "^22.20.5",
+    "@types/pg": "^8.11.10",
+    "@types/react": "^19.0.2",
+    "@types/react-dom": "^19.0.2",
+    "eslint": "^10.12.0",
+    "eslint-config-next": "^16.4.0",
+    "tsx": "4.23.15",
+    "typescript": "~5.9.3",
+    "vitest": "5.0.3"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

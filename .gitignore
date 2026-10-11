@@ -1,0 +1,53 @@
+# --- Secrets. Never commit. ---
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Neon local context file (org/project/branch IDs)
+.neon/
+
+# Vercel
+.vercel/
+
+# --- Dependencies ---
+node_modules/
+
+# --- Next.js ---
+.next/
+out/
+next-env.d.ts
+
+# --- Build / test output ---
+dist/
+coverage/
+*.tsbuildinfo
+
+# --- Ingestion cache (re-fetched from upstream docs) ---
+.cache/
+
+# --- Bundled embedding model cache (regenerate with: npm run model:fetch) ---
+# NOTE: models/ is intentionally COMMITTED so Vercel builds do not depend on the
+# Hugging Face CDN. Do not add it here.
+
+# --- Editor / OS ---
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# --- Logs ---
+*.log
+npm-debug.log*
+yarn-error.log*
+
+# --- Local tooling (development-only, not part of this project) ---
+skills/
+.agents/
+skills-lock.json
+opencode.json
+.claude/
+.mcp.json
+AGENTS.md
