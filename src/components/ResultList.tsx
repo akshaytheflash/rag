@@ -35,7 +35,12 @@ export function ResultList({ hits, query }: ResultListProps) {
             <li
               key={hit.chunkId}
               className="resultItem"
-              style={{ ["--spine" as string]: hit.sourceColor }}
+              style={{
+                ["--spine" as string]: hit.sourceColor,
+                // Drives the stagger below. Capped so the last result never
+                // waits long enough to feel broken.
+                ["--stagger" as string]: `${Math.min(index, 6) * 45}ms`,
+              }}
             >
               <span className="resultRank" aria-hidden="true">
                 {index + 1}

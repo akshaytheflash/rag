@@ -32,17 +32,33 @@ export function Passage({ hit }: PassageProps) {
             aria-controls={regionId}
             onClick={() => setExpanded((v) => !v)}
           >
+            {/* The mark is the indicator, not a label: it shows which way the
+                passage will move. Rotating it is the one motion that carries
+                information here. */}
+            <span className="passageCaret" aria-hidden="true">
+              <svg viewBox="0 0 10 10">
+                <path d="M2.5 3.5 L5 6 L7.5 3.5" />
+              </svg>
+            </span>
             <span className="passageToggleMark">{expanded ? "Hide passage" : "Show full passage"}</span>
             <span className="passageToggleMark">
               {Math.round(hit.text.length / 4).toLocaleString()} tokens
             </span>
           </button>
-          <div className="passageBody" id={regionId}>
-            {shown}
+          {/* The region animates open rather than appearing instantly, so it is
+              obvious that the text below the fold belongs to this result. */}
+          <div
+            className="passageBodyWrap"
+            id={regionId}
+            data-expanded={expanded ? "true" : "false"}
+          >
+            <div className="passageBody">{shown}</div>
           </div>
         </>
       ) : (
-        <div className="passageBody">{hit.text}</div>
+        <div className="passageBodyWrap" data-expanded="true">
+          <div className="passageBody">{hit.text}</div>
+        </div>
       )}
     </div>
   );
