@@ -44,13 +44,21 @@ interface DocSearchAppProps {
  *   their own passages and they are short, so they score well on term overlap.
  *   Those were all rejected.
  *
- * Re-run scripts/_evaldemo.ts to re-measure after any change to the index.
+ *   "How do I use a transaction with BEGIN and COMMIT?" was rejected for the
+ *   opposite reason to the ones above: its top passage is the "Notes" aside
+ *   under both filters. Asking for the construct by name does not help -
+ *   "What does COMMIT do in PostgreSQL?" ranks "Compatibility" at 0.791 and
+ *   "How do I use ROLLBACK in PostgreSQL?" ranks it at 0.806, both above the
+ *   sections that would have answered them. Framing the question as the task
+ *   rather than the keyword is what moved GROUP BY clear of the asides.
+ *
+ * Re-run scripts/eval-examples.ts to re-measure after any change to the index.
  */
 const EXAMPLES: Record<string, string> = {
   all: "How do I use Depends to declare a dependency in FastAPI?",
   python: "How do I create a virtual environment in Python?",
   fastapi: "How do I use a WebSocket in FastAPI?",
-  postgresql: "How do I use a transaction with BEGIN and COMMIT?",
+  postgresql: "How do I aggregate rows with GROUP BY in PostgreSQL?",
 };
 
 const VALID_SOURCES = new Set(["all", "python", "fastapi", "postgresql"]);
