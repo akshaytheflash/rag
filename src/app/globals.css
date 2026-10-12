@@ -1266,7 +1266,7 @@ input {
   justify-content: center;
   width: 2rem;
   height: 2rem;
-  margin-top: auto;
+  margin-bottom: 1.25rem;
   padding: 0;
   border: 1px solid var(--rule);
   color: var(--ink-2);
@@ -1317,10 +1317,10 @@ input {
   }
 }
 
-/* The rail becomes a horizontal strip on narrow screens, where the toggle no
-   longer has a column to sit at the bottom of. */
+/* On narrow screens the rail becomes a horizontal strip, where the toggle sits
+   inline above the wordmark rather than in a column of its own. */
 @media (max-width: 56rem) {
   .themeToggle {
-    margin-top: 1rem;
+    margin-bottom: 0.9rem;
   }
 }

@@ -42,6 +42,9 @@ export default function HowItWorksPage() {
   return (
     <div className="shell">
       <aside className="rail">
+        {/* Top-left, above the wordmark: the first control on the page. */}
+        <ThemeToggle />
+
         <h1 className="wordmark">
           <Link href="/" className="wordmarkLink">
             DocSearch
@@ -69,8 +72,6 @@ export default function HowItWorksPage() {
           Measured on {facts.generated} against the deployed index. Regenerate
           with <code>npm run db:stats -- --facts</code>.
         </p>
-
-        <ThemeToggle />
       </aside>
 
       <main className="main">

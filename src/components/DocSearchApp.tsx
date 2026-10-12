@@ -134,6 +134,9 @@ export function DocSearchApp({ sources, totalPassages }: DocSearchAppProps) {
   return (
     <div className="shell">
       <aside className="rail">
+        {/* Top-left, above the wordmark: the first control on the page. */}
+        <ThemeToggle />
+
         <h1 className="wordmark">
           <Link href="/" className="wordmarkLink">
             DocSearch
@@ -155,8 +158,6 @@ export function DocSearchApp({ sources, totalPassages }: DocSearchAppProps) {
             How this works
           </Link>
         </p>
-
-        <ThemeToggle />
       </aside>
 
       <main className="main">
