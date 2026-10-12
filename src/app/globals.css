@@ -707,149 +707,82 @@ input {
   max-width: var(--measure);
 }
 
-/* ==========================================================================
-   Responsive: the rail becomes a compact header strip.
-   ========================================================================== */
-
-@media (max-width: 56rem) {
-  .shell {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-areas:
-      "rail"
-      "main";
-    gap: 0;
-    padding: 0 1.15rem;
-  }
-
-  .rail {
-    position: static;
-    height: auto;
-    border-right: none;
-    border-bottom: 1px solid var(--rule);
-    padding: 1.25rem 0 0.9rem;
-  }
-
-  .contentsHeading {
-    margin-top: 1.35rem;
-  }
-
-  .contentsList {
-    display: flex;
-    gap: 0.5rem;
-    overflow-x: auto;
-    padding-bottom: 0.35rem;
-    scrollbar-width: thin;
-  }
-
-  .contentsItem {
-    flex: 0 0 auto;
-    min-width: 9.5rem;
-    border-left: none;
-    border-top: 2px solid transparent;
-    padding: 0.5rem 0.6rem 0.4rem;
-  }
-
-  .contentsItem:hover {
-    border-left-color: transparent;
-    border-top-color: var(--rule-strong);
-  }
-
-  .contentsItemActive {
-    border-left-color: transparent;
-    border-top-color: currentColor;
-  }
-
-  .contentsNote {
-    display: none;
-  }
-
-  .main {
-    padding-top: 1.6rem;
-  }
-
-  .searchPrompt {
-    max-width: 22ch;
-  }
-
-  .resultItem {
-    grid-template-columns: 1.5rem minmax(0, 1fr);
-    gap: 0 0.75rem;
-  }
-
-  .passageBody {
-    max-height: 20rem;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    animation-duration: 0.001ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.001ms !important;
-  }
-}
 
 /* ==========================================================================
    /how-it-works
 
-   Same instrument language as the search page: rules that separate, numbers
-   that mean something, one strong element. The charts are hand-drawn SVG so
-   the page ships no client-side JavaScript and no chart dependency - the
-   deployment is already close to its bundle budget.
+   Same instrument language as the search page - rules that separate, numbers
+   that mean something, one memorable thing per section - but pitched louder,
+   because this is the page that has to make an argument.
 
-   The one bold thing here is the score-separation figure. It is the argument
-   the whole system rests on - the empty band between what a real question
-   scores and what an unrelated one does - so it is given the most room and
-   the only shaded region on the page.
+   Charts are hand-drawn SVG so the page ships zero client-side JavaScript and
+   adds no dependency to a deployment already near its bundle limit.
+
+   Each figure carries exactly one idea and gives it the most room:
+
+     pipeline   the shape of a query
+     ranking    what fusion bought, shown as positions
+     density    why estimating chunk size failed
+     score gap  the reason a threshold can exist at all
+     latency    where the milliseconds actually go
+     corpus     what is indexed
+     storage    what it costs
+
    ========================================================================== */
 
-.lede {
-  padding-bottom: 1.75rem;
-  border-bottom: 1px solid var(--rule-strong);
+.contentsAbout {
+  margin: 1rem 0 0;
+  font-size: var(--step--1);
 }
 
-.ledeTitle {
-  margin: 0;
-  font-family: var(--font-display);
-  font-size: var(--step-3);
-  line-height: 1.04;
-  letter-spacing: -0.02em;
-  max-width: 20ch;
-}
-
-.ledeBody {
-  margin: 0.8rem 0 0;
+.contentsAboutLink {
+  text-decoration: underline;
+  text-decoration-color: var(--rule-strong);
   color: var(--ink-2);
-  line-height: 1.7;
-  max-width: var(--measure);
 }
+
+.contentsAboutLink:hover {
+  color: var(--ink);
+  text-decoration-color: currentColor;
+}
+
+/* --- Section openers ----------------------------------------------------- */
 
 .docSection {
-  padding: 2.25rem 0 0;
+  padding: 3.5rem 0 0;
   scroll-margin-top: 1.5rem;
 }
 
+/* A label that says what the section is, in the interface's own voice. Not a
+   tracked-out all-caps eyebrow: sentence case, small, and genuinely a label. */
+.kicker {
+  margin: 0 0 0.65rem;
+  font-size: var(--step--1);
+  color: var(--ink-3);
+}
+
 .docHeading {
-  margin: 0 0 0.85rem;
+  margin: 0 0 1.1rem;
   font-family: var(--font-display);
-  font-size: var(--step-2);
-  line-height: 1.15;
-  letter-spacing: -0.01em;
+  font-size: var(--step-3);
+  line-height: 1.06;
+  letter-spacing: -0.02em;
+  max-width: 17ch;
 }
 
 .docBody {
-  margin: 0 0 1rem;
+  margin: 0 0 1.05rem;
   color: var(--ink-2);
-  line-height: 1.7;
+  line-height: 1.72;
   max-width: var(--measure);
 }
 
 .docBody code,
-.docNote code {
+.docNote code,
+.chartFootnote,
+.closingNote code {
   font-family: var(--font-mono);
-  font-size: 0.95em;
+  font-size: 0.94em;
   padding: 0.05em 0.3em;
   background: var(--paper-sunk);
 }
@@ -859,65 +792,166 @@ input {
   font-weight: 600;
 }
 
-.docNote {
-  margin: 1.5rem 0 0;
-  font-size: var(--step--1);
-  color: var(--ink-3);
-  max-width: var(--measure);
-}
+/* --- The claim: the loudest thing on the page ---------------------------- */
 
-/* A sequence, so numbering is information rather than decoration. */
-.steps {
+.claim {
   margin: 0;
-  padding: 0;
-  list-style: none;
-  counter-reset: step;
-  max-width: var(--measure);
+  font-family: var(--font-display);
+  font-size: clamp(2.6rem, 7vw, 4.6rem);
+  line-height: 0.98;
+  letter-spacing: -0.03em;
+  max-width: 15ch;
+  text-wrap: balance;
 }
 
-.steps li {
-  counter-increment: step;
-  position: relative;
-  padding: 0.75rem 0 0.75rem 2.5rem;
-  border-top: 1px solid var(--rule);
+.claimBody {
+  margin: 1.4rem 0 0;
+  font-size: var(--step-1);
+  line-height: 1.62;
   color: var(--ink-2);
-  line-height: 1.65;
+  max-width: 54ch;
 }
 
-.steps li::before {
-  content: counter(step);
-  position: absolute;
-  left: 0;
-  top: 0.85rem;
+/* A band of large figures, ruled apart. The numbers are the argument, so they
+   are set at display size rather than tucked into a caption. */
+.statBand {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+  gap: 0;
+  margin-top: 2.5rem;
+  border-top: 1px solid var(--ink);
+  border-bottom: 1px solid var(--rule);
+}
+
+.statFigure {
+  padding: 1.1rem 1.25rem 1.1rem 0;
+  border-right: 1px solid var(--rule);
+}
+
+.statFigure:last-child {
+  border-right: none;
+}
+
+.statValue {
+  display: block;
+  font-family: var(--font-display);
+  font-size: 2.5rem;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  font-variant-numeric: lining-nums tabular-nums;
+}
+
+.statSuffix {
+  font-size: 1.1rem;
+  color: var(--ink-2);
+  margin-left: 0.15rem;
+}
+
+.statLabel {
+  display: block;
+  margin-top: 0.5rem;
+  font-size: var(--step--1);
+  color: var(--ink);
+}
+
+.statNote {
+  display: block;
+  margin-top: 0.15rem;
   font-size: var(--step--1);
   color: var(--ink-3);
-  font-variant-numeric: tabular-nums;
 }
 
-.steps li:first-child {
-  border-top: none;
-  padding-top: 0;
-}
-
-.steps li:first-child::before {
-  top: 0.1rem;
-}
-
-/* Figures sit on the page grid, wider than the text measure, because a chart
-   constrained to 68 characters is a chart nobody can read. */
-.figure {
-  margin: 1.5rem 0 1.5rem;
-  padding: 1.1rem 0 0.75rem;
+/* The three numbers the threshold argument turns on. */
+.figureNumbers {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  gap: 0;
+  margin: 1.25rem 0 1.5rem;
   border-top: 1px solid var(--rule);
   border-bottom: 1px solid var(--rule);
 }
 
-.figureCaption {
-  margin: 0 0 0.9rem;
+.figureNumber {
+  padding: 0.85rem 1rem 0.85rem 0;
+  border-right: 1px solid var(--rule);
+}
+
+.figureNumber:last-child {
+  border-right: none;
+}
+
+.figureNumberValue {
+  display: block;
+  font-family: var(--font-display);
+  font-size: 1.9rem;
+  line-height: 1;
+  letter-spacing: -0.015em;
+  font-variant-numeric: lining-nums tabular-nums;
+}
+
+.figureNumber-good .figureNumberValue { color: var(--ink); }
+.figureNumber-bad .figureNumberValue { color: var(--ink-3); }
+.figureNumber-mark .figureNumberValue { color: var(--spine, var(--ink)); }
+
+.figureNumberLabel {
+  display: block;
+  margin-top: 0.4rem;
   font-size: var(--step--1);
-  line-height: 1.6;
   color: var(--ink-2);
-  max-width: 64ch;
+}
+
+/* --- Pull quotes --------------------------------------------------------- */
+
+/* The one moment of emphasis in running text. Used twice per page at most,
+   because a pull quote on every section is just a paragraph in a bigger font. */
+.pullQuote {
+  margin: 1.75rem 0 0;
+  padding: 1.1rem 0 1.1rem 1.15rem;
+  border-left: 2px solid var(--ink);
+  max-width: var(--measure);
+}
+
+.pullQuote p {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--step-2);
+  line-height: 1.22;
+  letter-spacing: -0.012em;
+}
+
+.pullQuote p em {
+  font-style: italic;
+}
+
+.pullQuote span {
+  display: block;
+  margin-top: 0.65rem;
+  font-size: var(--step-0);
+  line-height: 1.7;
+  color: var(--ink-2);
+}
+
+/* --- Figures ------------------------------------------------------------- */
+
+/* A chart constrained to the 68-character text measure is a chart nobody can
+   read, so figures break out wider than the prose. */
+.figure {
+  margin: 1.75rem 0 1.75rem;
+  padding: 1.15rem 0 0.85rem;
+  border-top: 1px solid var(--rule-strong);
+  border-bottom: 1px solid var(--rule);
+}
+
+.figureTall {
+  padding-top: 1.25rem;
+}
+
+.figureCaption {
+  margin: 0 0 1rem;
+  font-size: var(--step--1);
+  line-height: 1.62;
+  color: var(--ink-2);
+  max-width: 68ch;
 }
 
 .chart {
@@ -927,37 +961,93 @@ input {
   overflow: visible;
 }
 
+/* --- Limits -------------------------------------------------------------- */
+
+.limits {
+  margin-top: 0.5rem;
+  border-top: 1px solid var(--rule-strong);
+}
+
+.limit {
+  padding: 1.1rem 0;
+  border-bottom: 1px solid var(--rule);
+  max-width: var(--measure);
+}
+
+.limitTitle {
+  margin: 0 0 0.35rem;
+  font-size: var(--step-1);
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.limitBody {
+  margin: 0;
+  color: var(--ink-2);
+  line-height: 1.7;
+}
+
+.closingNote {
+  margin-top: 2rem;
+  padding: 1.1rem 0 0;
+  border-top: 1px solid var(--ink);
+  max-width: var(--measure);
+}
+
+.closingNote p {
+  margin: 0;
+  font-size: var(--step-0);
+  line-height: 1.7;
+  color: var(--ink-2);
+}
+
+/* --- Chart internals ----------------------------------------------------- */
+
 .chartAxis,
-.chartBandGood,
-.chartBandBad {
+.chartRefLine {
   stroke: var(--rule-strong);
   stroke-width: 1;
-  fill: none;
 }
 
-.chartBandGood {
+.chartTick,
+.chartTickMark {
   stroke: var(--ink-3);
-  stroke-width: 2;
+  stroke-width: 1;
 }
 
-.chartBandBad {
-  stroke: var(--ink-3);
-  stroke-width: 2;
+.chartSpreadGood {
+  fill: var(--ink);
+  opacity: 0.82;
+}
+
+.chartSpreadBad {
+  fill: var(--ink-3);
   opacity: 0.55;
 }
 
-.chartDotGood {
+.chartTrack {
+  fill: var(--paper-sunk);
+}
+
+.chartMarkBox {
   fill: var(--ink);
 }
 
-.chartDotBad {
-  fill: var(--ink-2);
+.chartMarkBoxMuted {
+  fill: var(--rule-strong);
 }
 
-/* The only shaded area on the page. It is the subject of the argument. */
+/* The only shaded region on the page. It is the subject of the argument. */
 .chartGap {
   fill: var(--ink);
   opacity: 0.06;
+}
+
+.chartGapLabel {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  fill: var(--ink-3);
+  letter-spacing: 0.02em;
 }
 
 .chartThreshold {
@@ -968,8 +1058,14 @@ input {
 
 .chartMarkLabel {
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 12px;
   fill: var(--ink);
+}
+
+.chartStatLabel {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  fill: var(--ink-3);
 }
 
 .chartRowLabel,
@@ -984,7 +1080,8 @@ input {
 }
 
 .chartTick,
-.chartValue {
+.chartValue,
+.chartFootnote {
   font-family: var(--font-mono);
   font-size: 11px;
   fill: var(--ink-3);
@@ -997,7 +1094,7 @@ input {
 
 .chartAxisLabel {
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 10.5px;
   fill: var(--ink-3);
 }
 
@@ -1013,8 +1110,40 @@ input {
   fill: var(--ink-3);
 }
 
+/* Pipeline diagram */
+.pipeBox {
+  fill: var(--paper);
+  stroke: var(--ink);
+  stroke-width: 1;
+}
+
+.pipeTitle {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  fill: var(--ink);
+}
+
+.pipeSub,
+.pipeNote,
+.pipeFootnote {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  fill: var(--ink-3);
+}
+
+.pipeArrow {
+  stroke: var(--ink-3);
+  stroke-width: 1;
+}
+
+.pipeArrowHead {
+  fill: var(--ink-3);
+}
+
+/* --- Footer -------------------------------------------------------------- */
+
 .docFooter {
-  margin: 3rem 0 0;
+  margin: 3.5rem 0 0;
   padding-top: 1.25rem;
   border-top: 1px solid var(--rule-strong);
 }
@@ -1028,18 +1157,35 @@ input {
 .docBack:hover {
   text-decoration-color: currentColor;
 }
-.contentsAbout {
-  margin: 1rem 0 0;
-  font-size: var(--step--1);
-}
 
-.contentsAboutLink {
-  text-decoration: underline;
-  text-decoration-color: var(--rule-strong);
-  color: var(--ink-2);
-}
+@media (max-width: 56rem) {
+  .docSection {
+    padding-top: 2.5rem;
+  }
 
-.contentsAboutLink:hover {
-  color: var(--ink);
-  text-decoration-color: currentColor;
+  .docHeading {
+    max-width: 20ch;
+  }
+
+  .statValue {
+    font-size: 2rem;
+  }
+
+  .statFigure,
+  .figureNumber {
+    border-right: none;
+    border-bottom: 1px solid var(--rule);
+    padding-right: 0;
+  }
+
+  .statFigure:last-child,
+  .figureNumber:last-child {
+    border-bottom: none;
+  }
+
+  .figure,
+  .pullQuote {
+    margin-left: 0;
+    margin-right: 0;
+  }
 }

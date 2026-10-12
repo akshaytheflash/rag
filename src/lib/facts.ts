@@ -26,6 +26,22 @@ export interface Facts {
     offTopic: { max: number; median: number; p95: number; count: number };
   };
   thresholdSweep: { threshold: number; relevantPerQuery: number; offTopicPerQuery: number }[];
+  /**
+   * Where a query's time actually goes, measured separately because the two
+   * costs have different causes and different fixes. A single end-to-end
+   * number hides which one is slow.
+   */
+  latency: {
+    modelLoadMs: number;
+    embedWarmMs: number;
+    sqlMedianMs: number;
+    deployedColdMs: number;
+    deployedWarmMs: number;
+    deployedServerMedianMs: number;
+    deployedEmptyMs: number;
+  };
+  /** Rank of the correct passage, before and after adding the lexical retriever. */
+  rankingChange: { question: string; before: number; after: number; section: string };
   /** The threshold the system actually ships with. */
   threshold: number;
   /** Version of the file the measurements describe. */
@@ -79,6 +95,21 @@ export const facts: Facts = {
     { threshold: 0.55, relevantPerQuery: 55.5, offTopicPerQuery: 0 },
     { threshold: 0.6, relevantPerQuery: 23.3, offTopicPerQuery: 0 },
   ],
+  latency: {
+    modelLoadMs: 504,
+    embedWarmMs: 3,
+    sqlMedianMs: 293,
+    deployedColdMs: 2316,
+    deployedWarmMs: 570,
+    deployedServerMedianMs: 314,
+    deployedEmptyMs: 495,
+  },
+  rankingChange: {
+    question: "How do I return a file response from a route in FastAPI?",
+    before: 3,
+    after: 1,
+    section: "FileResponse",
+  },
 };
 
 export function formatBytes(bytes: number): string {
