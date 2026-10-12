@@ -7,6 +7,7 @@ import Link from "next/link";
 import { ContentsList } from "./ContentsList";
 import DotField from "./DotField";
 import { ResultList } from "./ResultList";
+import { AnswerBox } from "./AnswerBox";
 import { ThemeToggle } from "./ThemeToggle";
 
 type Status = "idle" | "loading" | "done" | "error";
@@ -144,7 +145,7 @@ export function DocSearchApp({ sources, totalPassages }: DocSearchAppProps) {
           </Link>
         </h1>
         <p className="wordmarkSub">
-          Semantic search over three manuals. Retrieval only.
+          Semantic search over three manuals, with a cited answer on top.
         </p>
 
         <ContentsList
@@ -166,8 +167,9 @@ export function DocSearchApp({ sources, totalPassages }: DocSearchAppProps) {
           <h2 className="searchPrompt">
             Find the passage that answers it
             <span className="searchPromptSub">
-              Your question is matched against every indexed passage. What comes back is the
-              documentation&rsquo;s own text, linked to the page it was taken from.
+              Your question is matched against every indexed passage. A cited answer is written from
+              the closest matches and streams in above them — every number in it links to the
+              passage it came from.
             </span>
           </h2>
 
@@ -265,6 +267,21 @@ export function DocSearchApp({ sources, totalPassages }: DocSearchAppProps) {
 
           {status === "done" && response && hits.length > 0 ? (
             <>
+              {/* The answer comes first and the passages follow, because the
+                  passages are the source and the answer is a reading aid over
+                  them. Both are visible at once: the box cites by number, and
+                  the list below is numbered to match.
+
+                  Keyed on the result set so each search mounts a fresh box.
+                  That is cheaper and far less error-prone than having the box
+                  reset its own state when the passages change - a stale answer
+                  left on screen while a new one streams in is the worst
+                  version of this bug. */}
+              <AnswerBox
+                key={`${response.query}:${hits.map((h) => h.chunkId).join(",")}`}
+                question={response.query}
+                hits={hits}
+              />
               <ResultList hits={hits} query={response.query} />
               <p className="disclaimer">
                 Similarity scores rank passages by how close they sit to your question in embedding

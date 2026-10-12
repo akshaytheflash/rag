@@ -19,7 +19,10 @@
  * and normalising them into one would invent a relationship that is not there.
  *
  * What comes back is the stored text verbatim. Nothing here generates,
- * rewrites, summarises or "answers" anything.
+ * rewrites, summarises or "answers" anything - the answer step in
+ * /api/answer is a separate request that receives these passages as input,
+ * so retrieval stands on its own regardless of whether any model is
+ * reachable.
  */
 import { query } from "./db";
 import { optionalEnvNumber } from "./env";

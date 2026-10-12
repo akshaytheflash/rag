@@ -31,7 +31,7 @@ export function HowItWorksRail() {
           DocSearch
         </Link>
       </h1>
-      <p className="wordmarkSub">Semantic search over three manuals. Retrieval only.</p>
+      <p className="wordmarkSub">Semantic search over three manuals, with a cited answer on top.</p>
 
       <nav className="contentsHeading" aria-label="On this page">
         <ul className="contentsList">

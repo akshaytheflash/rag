@@ -40,20 +40,24 @@ export default function HowItWorksPage() {
         <section className="docSection" id="claim">
           <p className="kicker">The whole design in one line</p>
           <h2 className="claim">
-            There is no language model in this system.
+            The passages are the answer. The text above them is only a reading aid.
           </h2>
           <p className="claimBody">
-            The only inference is a 22M-parameter sentence encoder that maps text
-            to a 384-number vector, and Postgres ranking that vector against every
-            stored passage. Nothing is generated, paraphrased, summarised or
-            answered. A result is a quote and a link, or it is nothing at all.
+            Retrieval is local and deterministic: a 22M-parameter sentence encoder
+            maps text to a 384-number vector, and Postgres ranks that vector against
+            every stored passage. What comes back is the documentation&rsquo;s own
+            words, never rewritten. A language model then reads the top passages and
+            writes a few sentences from them, marking each with the number of the
+            passage it copied — and every one of those numbers is a link. If the
+            model is wrong, the passages underneath it disagree, and they are the
+            part you can trust.
           </p>
 
           <div className="statBand">
             <StatFigure value={total.toLocaleString()} label="passages indexed" note={`across ${corpus.length} manuals`} />
             <StatFigure value={`${noise.max.toFixed(2)}–${rel.min.toFixed(2)}`} label="the gap" note="below it nothing is relevant" />
             <StatFigure value={latency.deployedWarmMs} suffix="ms" label="warm query" note={`${latency.deployedColdMs} ms cold`} />
-            <StatFigure value="0" label="tokens generated" note="nothing is written, only quoted" />
+            <StatFigure value="6" label="passages per answer" note="all the model is shown" />
           </div>
         </section>
 
@@ -61,7 +65,7 @@ export default function HowItWorksPage() {
         <section className="docSection" id="pipeline">
           <p className="kicker">01 — The pipeline</p>
           <h3 className="docHeading">
-            One question, four steps, no generation
+            One question, five steps
           </h3>
           <p className="docBody">
             Ingestion runs locally and never ships. A crawler reads each
@@ -72,9 +76,12 @@ export default function HowItWorksPage() {
             passage is embedded and written to Postgres with pgvector.
           </p>
           <p className="docBody">
-            At query time only retrieval happens. The embedding model is imported
-            lazily inside the search function, so rendering the landing page never
-            loads onnxruntime or the 22 MB of weights.
+            At query time retrieval happens first and entirely locally. The embedding
+            model is imported lazily inside the search function, so rendering the
+            landing page never loads onnxruntime or the 22 MB of weights. Only after
+            the passages are chosen does anything leave the machine: the answer step
+            forwards those same passages to a language model and streams back what
+            it writes, and it is the only part of a query that touches the network.
           </p>
 
           <figure className="figure figureTall">
@@ -292,8 +299,51 @@ export default function HowItWorksPage() {
         </section>
 
         {/* =============================================================== */}
+        <section className="docSection" id="answering">
+          <p className="kicker">06 — The answer</p>
+          <h3 className="docHeading">
+            Quoting is the whole trick
+          </h3>
+          <p className="docBody">
+            Retrieval alone leaves the reader to do the synthesis. So the top six
+            passages are forwarded to a language model with an instruction to copy
+            from them and mark each copied sentence with the number of the passage it
+            came from. Everything else follows from taking that instruction seriously:
+            the passages go <em>before</em> the instruction, because a model continues
+            from what sits directly above it; the temperature is 0.1, because a
+            fluent paraphrase is exactly the failure this is built to avoid; and the
+            model is named in the interface next to the text it wrote.
+          </p>
+          <p className="docBody">
+            It runs on Groq&rsquo;s free tier rather than in the function. A model small
+            enough to fit the 250 MB deployment limit — SmolLM2-135M — was measured
+            against these same passages and could not do the task: across four
+            attempts it invented a FastAPI function called
+            <code> getFileRespondingFromRoutes</code>, invented two database tables, and
+            emitted no citations at all. The next size up, at 260 MB, does not fit in
+            the budget the embedder leaves behind. That arithmetic, not a preference,
+            is why the model is remote.
+          </p>
+          <p className="docBody">
+            Two models are tried in order, because one provider is a single point of
+            failure — a rate limit or an outage would otherwise take the feature down
+            with no recourse. Each generator must fail <em>before</em> emitting its
+            first token for the next one to take over, so a fallback can never splice
+            two answers together. When every provider fails, an answer is composed
+            from the passages directly: less fluent, and unable to synthesise, but
+            unable to be wrong about the documentation, since every sentence it emits
+            is verbatim from the database.
+          </p>
+          <p className="docBody">
+            The answer is labelled as generated wherever it appears, and the passages
+            stay on screen underneath it, numbered to match. A reader who does not
+            trust the text still has the quotes.
+          </p>
+        </section>
+
+        {/* =============================================================== */}
         <section className="docSection" id="corpus">
-          <p className="kicker">06 — What is indexed</p>
+          <p className="kicker">07 — What is indexed</p>
           <h3 className="docHeading">
             Sections, not pages
           </h3>
@@ -324,7 +374,7 @@ export default function HowItWorksPage() {
 
         {/* =============================================================== */}
         <section className="docSection" id="storage">
-          <p className="kicker">07 — What it costs</p>
+          <p className="kicker">08 — What it costs</p>
           <h3 className="docHeading">
             Almost all of it is index
           </h3>
@@ -378,10 +428,18 @@ export default function HowItWorksPage() {
 
         {/* =============================================================== */}
         <section className="docSection" id="limits">
-          <p className="kicker">08 — Limits and trade-offs</p>
+          <p className="kicker">09 — Limits and trade-offs</p>
           <h3 className="docHeading">What breaks first</h3>
 
           <div className="limits">
+            <Limit
+              title="The answer can still be wrong"
+              body="Citation is a strong instruction, not a guarantee. Measured over five representative questions the chain cited correctly every time and invented nothing, but five cases is a smoke test, not an evaluation set. A citation says which passage a sentence came from — it does not prove the sentence faithfully represents that passage. This is why the passages sit directly underneath, rather than being replaced by the answer."
+            />
+            <Limit
+              title="The model runs on someone else's free tier"
+              body="Groq's free plan allows 1,000 requests and 8,000 tokens a minute, which is far above what this deployment could serve — but a free tier is not a contract. If the key is revoked or the provider is unreachable, the fallback chain walks to a second model and then to composing from the passages directly. The retrieval half of the product does not depend on any of it."
+            />
             <Limit
               title="Python and PostgreSQL still hold truncated passages"
               body="The chunker fix only applies to passages generated after it landed. FastAPI has been re-ingested and is clean; the other two still carry roughly 60 passages whose tails were never embedded."
@@ -523,7 +581,7 @@ function PipelineDiagram({ threshold }: { threshold: number }) {
       className="chart"
       viewBox={`0 0 ${W} ${H}`}
       role="img"
-      aria-label="The question is embedded, ranked two ways at once, fused by reciprocal rank fusion, and returned as verbatim passages."
+      aria-label="The question is embedded, ranked two ways at once, fused by reciprocal rank fusion, and returned as verbatim passages, which a language model then reads to write the cited answer above them."
     >
       {stage(colX[0], 100, "Embed", "22M params, 384-d")}
       {arrow(colX[0] + colW, 123, colX[1] - 6)}
@@ -628,12 +686,19 @@ function DensityChart() {
       {rows.map(([label, value, colour], i) => {
         const y = i * rowH + 6;
         return (
-          <g key={label}>
-            <text x={padL - 10} y={y + 14} className="chartRowLabel" textAnchor="end">
+          <g
+            key={label}
+            className="chartRow"
+            tabIndex={0}
+            role="img"
+            aria-label={`${label}: ${value.toFixed(2)} characters per word-piece`}
+          >
+            <rect x={0} y={y - 3} width={W} height={rowH - 4} className="chartRowHit" />
+            <text x={padL - 10} y={y + 14} className="chartRowValue" textAnchor="end">
               {label}
             </text>
             <rect x={padL} y={y + 4} width={Math.max(1, w(value))} height={11} fill={colour} />
-            <text x={W - padR + 8} y={y + 14} className="chartValue">
+            <text x={W - padR + 8} y={y + 14} className="chartRowValue">
               {value.toFixed(2)}
             </text>
           </g>
@@ -749,52 +814,86 @@ function ThresholdSweep({
   rows: { threshold: number; relevantPerQuery: number; offTopicPerQuery: number }[];
   threshold: number;
 }) {
-  const W = 720;
-  const rowH = 28;
+  const W = 760;
+  const rowH = 30;
   const padL = 92;
-  const padR = 72;
-  const H = rows.length * rowH + 32;
+  const padR = 132;
+  const H = rows.length * rowH + 48;
   const max = Math.max(...rows.map((r) => r.relevantPerQuery));
   // Square-root scale: the range spans three orders of magnitude, and a linear
   // axis would render every value below 0.6 as indistinguishable from zero.
-  const w = (v: number) => Math.sqrt(v / max) * (W - padL - padR);
+  const barMax = W - padL - padR;
+  const w = (v: number) => Math.sqrt(v / max) * barMax;
+  const valueX = W - padR + 10;
+  const noiseX = W - 52;
 
   return (
     <svg
       className="chart"
       viewBox={`0 0 ${W} ${H}`}
       role="img"
-      aria-label="Passages admitted per query at each candidate threshold. Off-topic questions admit nothing at or above 0.30."
+      aria-label="Passages admitted per query at each candidate threshold. Unrelated questions admit nothing at or above 0.30."
     >
+      {/* Column headings, so the two numbers cannot be read as one. */}
+      <text x={valueX} y={12} className="chartColumnHead" textAnchor="start">
+        real
+      </text>
+      <text x={noiseX} y={12} className="chartColumnHead" textAnchor="middle">
+        unrelated
+      </text>
+
       {rows.map((r, i) => {
-        const y = i * rowH + 6;
+        const y = i * rowH + 26;
         const active = Math.abs(r.threshold - threshold) < 0.001;
+        const leaks = r.offTopicPerQuery > 0;
         return (
-          <g key={r.threshold}>
-            <text x={padL - 8} y={y + 14} className={active ? "chartRowLabelStrong" : "chartRowLabel"} textAnchor="end">
+          // Focusable, so the highlight is reachable without a mouse. A <g>
+          // takes tabindex under SVG2 and every current browser honours it.
+          <g
+            key={r.threshold}
+            className={`chartRow${active ? " chartRowActive" : ""}`}
+            tabIndex={0}
+            role="img"
+            aria-label={`Threshold ${r.threshold.toFixed(2)}: ${r.relevantPerQuery.toLocaleString()} passages admitted per real question, ${r.offTopicPerQuery} from unrelated questions.`}
+          >
+            {/* Invisible full-width target, so the whole row lights up rather
+                than only the few pixels of bar the pointer actually lands on. */}
+            <rect x={0} y={y - 3} width={W} height={rowH - 2} className="chartRowHit" />
+            <text x={padL - 8} y={y + 15} className="chartRowValue" textAnchor="end">
               {r.threshold.toFixed(2)}
             </text>
             <rect
               x={padL}
               y={y + 4}
               width={Math.max(1, w(r.relevantPerQuery))}
-              height={12}
-              className={active ? "chartBarActive" : "chartBar"}
+              height={13}
+              className="chartBar"
             />
-            <text x={W - padR + 8} y={y + 14} className="chartValue">
+            <text x={valueX} y={y + 15} className="chartRowValue">
               {r.relevantPerQuery.toLocaleString()}
+            </text>
+            <text
+              x={noiseX}
+              y={y + 15}
+              className={leaks ? "chartRowValue chartRowValueLeak" : "chartRowValue chartRowValueZero"}
+              textAnchor="middle"
+            >
+              {r.offTopicPerQuery}
             </text>
           </g>
         );
       })}
-      <text x={padL} y={H - 6} className="chartAxisLabel">
-        passages admitted per real question (square-root scale) · off-topic queries admit 0 at every threshold above 0.30
+
+      <text x={padL} y={H - 8} className="chartAxisLabel">
+        passages admitted per question (square-root scale)
+      </text>
+      <text x={W} y={H - 8} className="chartAxisLabel" textAnchor="end">
+        unrelated leak in only below 0.30
       </text>
     </svg>
   );
 }
 
-/** Decomposed latency, on a log scale so all three bars are readable. */
 function LatencyChart({ l }: { l: Record<string, number> }) {
   const rows: [string, number, boolean][] = [
     ["embed the question", l.embedWarmMs, false],
@@ -821,8 +920,15 @@ function LatencyChart({ l }: { l: Record<string, number> }) {
       {rows.map(([label, value, active], i) => {
         const y = i * rowH + 8;
         return (
-          <g key={label}>
-            <text x={padL - 10} y={y + 16} className={active ? "chartRowLabelStrong" : "chartRowLabel"} textAnchor="end">
+          <g
+            key={label}
+            className={`chartRow${active ? " chartRowActive" : ""}`}
+            tabIndex={0}
+            role="img"
+            aria-label={`${label}: ${value.toLocaleString()} milliseconds`}
+          >
+            <rect x={0} y={y - 3} width={W} height={rowH - 4} className="chartRowHit" />
+            <text x={padL - 10} y={y + 16} className="chartRowValue" textAnchor="end">
               {label}
             </text>
             <rect
@@ -830,9 +936,9 @@ function LatencyChart({ l }: { l: Record<string, number> }) {
               y={y + 5}
               width={Math.max(2, w(value))}
               height={16}
-              className={active ? "chartBarActive" : "chartBar"}
+              className="chartBar"
             />
-            <text x={W - padR + 8} y={y + 18} className="chartValue">
+            <text x={W - padR + 8} y={y + 18} className="chartRowValue">
               {value.toLocaleString()} ms
             </text>
           </g>
@@ -870,8 +976,15 @@ function CorpusBars({
         const y = i * rowH + 8;
         const barW = (c.passages / max) * (W - padL - padR);
         return (
-          <g key={c.source}>
-            <text x={padL - 8} y={y + 17} className="chartRowLabel" textAnchor="end">
+          <g
+            key={c.source}
+            className="chartRow"
+            tabIndex={0}
+            role="img"
+            aria-label={`${c.source}: ${c.passages.toLocaleString()} passages, median ${c.medianChars} characters`}
+          >
+            <rect x={0} y={y - 3} width={W} height={rowH - 4} className="chartRowHit" />
+            <text x={padL - 8} y={y + 17} className="chartRowValue" textAnchor="end">
               {c.source}
             </text>
             <rect
@@ -882,7 +995,7 @@ function CorpusBars({
               fill={SOURCE_COLORS[c.source] ?? "var(--ink-2)"}
               opacity={0.85}
             />
-            <text x={W - padR + 8} y={y + 17} className="chartValue">
+            <text x={W - padR + 8} y={y + 17} className="chartRowValue">
               {c.passages.toLocaleString()}
             </text>
           </g>
@@ -926,8 +1039,15 @@ function StorageBars({
         const barW = (item.bytes / max) * (W - padL - padR);
         const isIndex = item.label !== "chunks" && item.label !== "documents";
         return (
-          <g key={item.label}>
-            <text x={padL - 8} y={y + 13} className="chartRowLabel" textAnchor="end">
+          <g
+            key={item.label}
+            className="chartRow"
+            tabIndex={0}
+            role="img"
+            aria-label={`${item.label}: ${formatBytes(item.bytes)}`}
+          >
+            <rect x={0} y={y - 2} width={W} height={rowH - 2} className="chartRowHit" />
+            <text x={padL - 8} y={y + 13} className="chartRowValue" textAnchor="end">
               {item.label}
             </text>
             <rect
@@ -937,7 +1057,7 @@ function StorageBars({
               height={11}
               className={isIndex ? "chartBarIndex" : "chartBar"}
             />
-            <text x={W - padR + 8} y={y + 13} className="chartValue">
+            <text x={W - padR + 8} y={y + 13} className="chartRowValue">
               {formatBytes(item.bytes)}
             </text>
           </g>

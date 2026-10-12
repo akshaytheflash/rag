@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Semantic search over the official Python, FastAPI and PostgreSQL documentation. Retrieval only - no LLM.",
+  "description": "Semantic search over the official Python, FastAPI and PostgreSQL documentation, with a cited answer written from the retrieved passages.",
   "scripts": {
     "dev": "next dev",
     "build": "next build",

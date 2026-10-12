@@ -4,10 +4,26 @@ Ask a question about Python, FastAPI or PostgreSQL and get back the passages fro
 the official documentation that match it — copied verbatim, ranked by embedding
 similarity, and linked to the page each one came from.
 
-**There is no language model in this system.** The only inference is a 22M-parameter
-sentence encoder that maps text to a 384-number vector. Nothing is generated,
-paraphrased, summarised or answered. A result is a quote and a link, or it is
-nothing at all.
+Above those passages, a cited answer is written from them and streams in as it
+arrives. Every numbered marker in it is a link to the passage that sentence came
+from.
+
+## Where the line is
+
+Retrieval is local, deterministic, and generates nothing: a 22M-parameter
+sentence encoder maps text to a 384-number vector, and Postgres ranks that
+vector against every stored passage. What comes back is the documentation's own
+words.
+
+The answer is generated. A language model reads the top six passages and writes
+a few sentences from them, citing each by number. It runs on Groq's free tier,
+not in the function, and it is the only part of a query that leaves the machine.
+
+That split is deliberate. A language model that reads fluently and is subtly
+wrong is a failure a reader cannot detect on their own, so the generated text
+is always labelled as generated, the model that wrote it is named on screen, and
+the passages it was written from stay directly underneath, numbered to match.
+The passages are the part you can trust.
 
 ---
 
@@ -31,6 +47,12 @@ QUERY TIME (Vercel serverless function)
 ───────────────────────────────────────
   question ▶▶ embed ▶▶ two rankings at once ▶▶ fuse ▶▶ verbatim passages
                  (local)   cosine + BM25        (RRF)      + source URL
+                             │
+                             ▼  the only step that leaves the machine
+                   language model quotes the top 6, citing each by number
+                             │
+                             ▼
+                    streamed answer, with the passages it came from below
 ```
 
 ### Retrieval, in four steps

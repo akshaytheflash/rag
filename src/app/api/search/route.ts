@@ -10,9 +10,13 @@ export const dynamic = "force-dynamic";
 /**
  * POST /api/search
  *
- * Retrieval only. The response contains passages copied verbatim from the
- * official documentation, each with its canonical URL. No text is generated,
- * paraphrased or synthesised anywhere in this route.
+ * Retrieval, and nothing else. The response contains passages copied verbatim
+ * from the official documentation, each with its canonical URL. No text is
+ * generated, paraphrased or synthesised in this route.
+ *
+ * The answer over these results is a separate request to /api/answer, which
+ * receives the passages this route returned. Keeping them apart means the
+ * retrieval half of the product keeps working when the model provider does not.
  */
 export async function POST(request: Request) {
   let body: unknown;

@@ -21,7 +21,7 @@ const plexMono = IBM_Plex_Mono({
 export const metadata: Metadata = {
   title: "DocSearch — official Python, FastAPI and PostgreSQL docs",
   description:
-    "Ask a question and get back the passages that match it, copied verbatim from the official Python, FastAPI and PostgreSQL documentation, each linking to its source page.",
+    "Ask a question and get back the passages that match it, copied verbatim from the official Python, FastAPI and PostgreSQL documentation, each linking to its source page, with a cited answer written from them.",
 };
 
 export const viewport = {

@@ -2,11 +2,15 @@
 
 import type { SearchHit } from "@/lib/search";
 import { Passage } from "./Passage";
+import { passageAnchor } from "./AnswerBox";
 
 interface ResultListProps {
   hits: SearchHit[];
   query: string;
 }
+
+/** Must match MAX_PASSAGES in AnswerBox and /api/answer. */
+const ANSWER_PASSAGE_LIMIT = 6;
 
 /**
  * A ranked index. The number in the margin is the rank, which is a real
@@ -30,10 +34,15 @@ export function ResultList({ hits, query }: ResultListProps) {
           const ancestors = hit.headingPath.slice(0, -1);
           const pageTitle = hit.title !== hit.sectionTitle ? hit.title : null;
           const lexicalOnly = hit.similarity === null;
+          // Only the passages the model was actually shown can be cited, so
+          // only those get an anchor. Numbering is capped to match.
+          const citable = index < ANSWER_PASSAGE_LIMIT;
 
           return (
             <li
               key={hit.chunkId}
+              // The target the answer box's citation markers link to.
+              id={citable ? passageAnchor(index + 1) : undefined}
               className="resultItem"
               style={{
                 ["--spine" as string]: hit.sourceColor,

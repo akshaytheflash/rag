@@ -18,6 +18,7 @@ export const SECTIONS: Section[] = [
   { id: "bug", label: "A bug worth reading about" },
   { id: "threshold", label: "Choosing the threshold" },
   { id: "performance", label: "Performance" },
+  { id: "answering", label: "The answer" },
   { id: "corpus", label: "What is indexed" },
   { id: "storage", label: "What it costs" },
   { id: "limits", label: "Limits and trade-offs" },
