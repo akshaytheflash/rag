@@ -17,11 +17,40 @@ interface DocSearchAppProps {
   totalPassages: number;
 }
 
+/**
+ * Demo questions.
+ *
+ * Each one was run against the live index and kept only because its single best
+ * passage actually answers it - not merely relates to it. The bar was the
+ * generated answer quoting that passage and citing it, under both its own
+ * manual and the "all" filter, since "all" is what a first-time visitor runs
+ * before touching a filter button.
+ *
+ * That bar rejected more than it kept, and the failures are the useful part:
+ *
+ *   "How do I use a trigger in PostgreSQL?" scored 0.739 - higher than several
+ *   that were kept - but its top passage is a note about DROP TRIGGER being
+ *   nonstandard, and the answer followed it there. A high score on a passage
+ *   that does not answer the question is the exact failure a demo cannot show.
+ *
+ *   "How do I alter a table with ALTER TABLE?" retrieves the ALTER TABLE
+ *   reference page, which is a syntax listing, not an explanation.
+ *
+ *   "What is a list comprehension in Python?" retrieved its history - who
+ *   proposed it and when - rather than what one is.
+ *
+ *   Several PostgreSQL questions retrieve sidebar furniture ("Note", "Tip",
+ *   "Compatibility") as the top hit, because the manual splits those out into
+ *   their own passages and they are short, so they score well on term overlap.
+ *   Those were all rejected.
+ *
+ * Re-run scripts/_evaldemo.ts to re-measure after any change to the index.
+ */
 const EXAMPLES: Record<string, string> = {
-  all: "How do I create a dependency in FastAPI?",
-  python: "How do I write a generator that yields values?",
-  fastapi: "How do I return a file response from a route?",
-  postgresql: "How do I use a window function with OVER?",
+  all: "How do I use Depends to declare a dependency in FastAPI?",
+  python: "How do I create a virtual environment in Python?",
+  fastapi: "How do I use a WebSocket in FastAPI?",
+  postgresql: "How do I use a transaction with BEGIN and COMMIT?",
 };
 
 const VALID_SOURCES = new Set(["all", "python", "fastapi", "postgresql"]);
