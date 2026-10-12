@@ -29,6 +29,12 @@
 
   --focus: #17191c;
 
+  /* DotField reads these, so the canvas follows the theme without the
+     component knowing which theme is active. Derived from the manual hues
+     rather than a decorative purple, so the field belongs to this palette. */
+  --dot-from: rgba(47, 109, 164, 0.26);
+  --dot-to: rgba(46, 92, 138, 0.10);
+
   --measure: 68ch;
   --rail: 15rem;
 
@@ -74,6 +80,8 @@
   --postgresql: #7d9fd0;
 
   --focus: #e8eaed;
+    --dot-from: rgba(107, 163, 214, 0.24);
+    --dot-to: rgba(125, 159, 208, 0.10);
 }
 
 /* Honour the OS setting until the visitor chooses otherwise. An explicit
@@ -96,6 +104,8 @@
     --postgresql: #7d9fd0;
 
     --focus: #e8eaed;
+    --dot-from: rgba(107, 163, 214, 0.24);
+    --dot-to: rgba(125, 159, 208, 0.10);
   }
 }
 
@@ -1323,4 +1333,41 @@ input {
   .themeToggle {
     margin-bottom: 0.9rem;
   }
+}
+
+.dotField {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  /* Absolutely decorative: never intercept a click, scroll or focus ring. */
+  pointer-events: none;
+  z-index: 0;
+}
+
+.dotFieldCanvas,
+.dotFieldGlowLayer {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.dotFieldGlowLayer {
+  pointer-events: none;
+}
+
+/* The idle state carries the DotField. It is the only place on the page where
+   something is not being read, so it is the only place a repainting canvas is
+   acceptable. The heading and suggestions sit above it; the field itself is
+   pointer-events:none, so it cannot take a click meant for a suggestion. */
+.stateBlockIdle {
+  position: relative;
+  isolation: isolate;
+}
+
+.stateBlockIdle > *:not(.dotField) {
+  position: relative;
+  z-index: 1;
 }

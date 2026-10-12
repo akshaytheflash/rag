@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { ContentsList } from "./ContentsList";
+import DotField from "./DotField";
 import { ResultList } from "./ResultList";
 import { ThemeToggle } from "./ThemeToggle";
 
@@ -313,7 +314,19 @@ export function DocSearchApp({ sources, totalPassages }: DocSearchAppProps) {
           ) : null}
 
           {status === "idle" ? (
-            <section className="stateBlock">
+            <section className="stateBlock stateBlockIdle">
+              {/* Decorative only, and only here. It never sits behind a
+                  passage being read - that would put a repainting canvas
+                  under the one thing this page exists to show. */}
+              <DotField
+                dotRadius={1.5}
+                dotSpacing={15}
+                cursorRadius={240}
+                bulgeStrength={38}
+                glowRadius={140}
+                sparkle={false}
+                waveAmplitude={0}
+              />
               <h2 className="stateHeading">Ask in your own words</h2>
               <p className="stateText">
                 {totalPassages > 0
