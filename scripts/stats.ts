@@ -6,6 +6,20 @@
 import { closePool } from "../src/lib/db";
 import { getCorpusStats } from "../src/lib/search";
 
+/**
+ * `--facts` regenerates the measurements the implementation page renders.
+ *
+ * The page has no hard-coded figures, so this is the only way they change. Run
+ * it after a re-ingest, then commit the updated src/lib/facts.ts.
+ */
+if (process.argv.includes("--facts")) {
+  const { spawnSync } = await import("node:child_process");
+  const result = spawnSync(process.execPath, ["--import", "tsx", "scripts/facts.ts"], {
+    stdio: "inherit",
+  });
+  process.exit(result.status ?? 0);
+}
+
 const pad = (value: string, width: number) => value.padEnd(width);
 const num = (value: number) => value.toLocaleString("en-US");
 

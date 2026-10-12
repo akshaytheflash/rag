@@ -148,6 +148,12 @@ export function DocSearchApp({ sources, totalPassages }: DocSearchAppProps) {
           active={source}
           onSelect={onSelectSource}
         />
+
+        <p className="contentsAbout">
+          <Link href="/how-it-works" className="contentsAboutLink">
+            How this works
+          </Link>
+        </p>
       </aside>
 
       <main className="main">

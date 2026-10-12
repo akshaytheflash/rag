@@ -1,4 +1,4 @@
-/* ==========================================================================
+﻿/* ==========================================================================
    Design tokens
 
    Subject: a reference instrument for three long manuals. The interface
@@ -789,4 +789,257 @@ input {
     animation-iteration-count: 1 !important;
     transition-duration: 0.001ms !important;
   }
+}
+
+/* ==========================================================================
+   /how-it-works
+
+   Same instrument language as the search page: rules that separate, numbers
+   that mean something, one strong element. The charts are hand-drawn SVG so
+   the page ships no client-side JavaScript and no chart dependency - the
+   deployment is already close to its bundle budget.
+
+   The one bold thing here is the score-separation figure. It is the argument
+   the whole system rests on - the empty band between what a real question
+   scores and what an unrelated one does - so it is given the most room and
+   the only shaded region on the page.
+   ========================================================================== */
+
+.lede {
+  padding-bottom: 1.75rem;
+  border-bottom: 1px solid var(--rule-strong);
+}
+
+.ledeTitle {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--step-3);
+  line-height: 1.04;
+  letter-spacing: -0.02em;
+  max-width: 20ch;
+}
+
+.ledeBody {
+  margin: 0.8rem 0 0;
+  color: var(--ink-2);
+  line-height: 1.7;
+  max-width: var(--measure);
+}
+
+.docSection {
+  padding: 2.25rem 0 0;
+  scroll-margin-top: 1.5rem;
+}
+
+.docHeading {
+  margin: 0 0 0.85rem;
+  font-family: var(--font-display);
+  font-size: var(--step-2);
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+}
+
+.docBody {
+  margin: 0 0 1rem;
+  color: var(--ink-2);
+  line-height: 1.7;
+  max-width: var(--measure);
+}
+
+.docBody code,
+.docNote code {
+  font-family: var(--font-mono);
+  font-size: 0.95em;
+  padding: 0.05em 0.3em;
+  background: var(--paper-sunk);
+}
+
+.docBody strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.docNote {
+  margin: 1.5rem 0 0;
+  font-size: var(--step--1);
+  color: var(--ink-3);
+  max-width: var(--measure);
+}
+
+/* A sequence, so numbering is information rather than decoration. */
+.steps {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: step;
+  max-width: var(--measure);
+}
+
+.steps li {
+  counter-increment: step;
+  position: relative;
+  padding: 0.75rem 0 0.75rem 2.5rem;
+  border-top: 1px solid var(--rule);
+  color: var(--ink-2);
+  line-height: 1.65;
+}
+
+.steps li::before {
+  content: counter(step);
+  position: absolute;
+  left: 0;
+  top: 0.85rem;
+  font-size: var(--step--1);
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.steps li:first-child {
+  border-top: none;
+  padding-top: 0;
+}
+
+.steps li:first-child::before {
+  top: 0.1rem;
+}
+
+/* Figures sit on the page grid, wider than the text measure, because a chart
+   constrained to 68 characters is a chart nobody can read. */
+.figure {
+  margin: 1.5rem 0 1.5rem;
+  padding: 1.1rem 0 0.75rem;
+  border-top: 1px solid var(--rule);
+  border-bottom: 1px solid var(--rule);
+}
+
+.figureCaption {
+  margin: 0 0 0.9rem;
+  font-size: var(--step--1);
+  line-height: 1.6;
+  color: var(--ink-2);
+  max-width: 64ch;
+}
+
+.chart {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+.chartAxis,
+.chartBandGood,
+.chartBandBad {
+  stroke: var(--rule-strong);
+  stroke-width: 1;
+  fill: none;
+}
+
+.chartBandGood {
+  stroke: var(--ink-3);
+  stroke-width: 2;
+}
+
+.chartBandBad {
+  stroke: var(--ink-3);
+  stroke-width: 2;
+  opacity: 0.55;
+}
+
+.chartDotGood {
+  fill: var(--ink);
+}
+
+.chartDotBad {
+  fill: var(--ink-2);
+}
+
+/* The only shaded area on the page. It is the subject of the argument. */
+.chartGap {
+  fill: var(--ink);
+  opacity: 0.06;
+}
+
+.chartThreshold {
+  stroke: var(--ink);
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+}
+
+.chartMarkLabel {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  fill: var(--ink);
+}
+
+.chartRowLabel,
+.chartRowLabelStrong {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  fill: var(--ink-2);
+}
+
+.chartRowLabelStrong {
+  fill: var(--ink);
+}
+
+.chartTick,
+.chartValue {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  fill: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.chartValue {
+  fill: var(--ink-2);
+}
+
+.chartAxisLabel {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  fill: var(--ink-3);
+}
+
+.chartBar {
+  fill: var(--rule-strong);
+}
+
+.chartBarActive {
+  fill: var(--ink);
+}
+
+.chartBarIndex {
+  fill: var(--ink-3);
+}
+
+.docFooter {
+  margin: 3rem 0 0;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--rule-strong);
+}
+
+.docBack {
+  font-size: var(--step--1);
+  text-decoration: underline;
+  text-decoration-color: var(--rule-strong);
+}
+
+.docBack:hover {
+  text-decoration-color: currentColor;
+}
+.contentsAbout {
+  margin: 1rem 0 0;
+  font-size: var(--step--1);
+}
+
+.contentsAboutLink {
+  text-decoration: underline;
+  text-decoration-color: var(--rule-strong);
+  color: var(--ink-2);
+}
+
+.contentsAboutLink:hover {
+  color: var(--ink);
+  text-decoration-color: currentColor;
 }
