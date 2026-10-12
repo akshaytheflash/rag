@@ -1,5 +1,5 @@
 ﻿import Link from "next/link";
-import { ThemeToggle } from "@/components/ThemeToggle";
+import { HowItWorksRail } from "@/components/HowItWorksRail";
 import { facts, formatBytes } from "@/lib/facts";
 
 export const metadata = {
@@ -8,17 +8,9 @@ export const metadata = {
     "The retrieval pipeline behind DocSearch, with measurements taken from the live index: hybrid ranking, score separation, latency, corpus shape and storage.",
 };
 
-const NAV = [
-  ["The claim", "#claim"],
-  ["The pipeline", "#pipeline"],
-  ["Two retrievers", "#retrieval"],
-  ["A bug worth reading about", "#bug"],
-  ["Choosing the threshold", "#threshold"],
-  ["Performance", "#performance"],
-  ["What is indexed", "#corpus"],
-  ["What it costs", "#storage"],
-  ["Limits and trade-offs", "#limits"],
-];
+/* Section ids come from ./sections so the rail's nav and this document cannot
+   drift apart. The page itself does not need the list - it renders the
+   sections directly - so nothing is imported here. */
 
 /**
  * How this system actually works, with the numbers measured from the live
@@ -41,38 +33,7 @@ export default function HowItWorksPage() {
 
   return (
     <div className="shell">
-      <aside className="rail">
-        {/* Top-left, above the wordmark: the first control on the page. */}
-        <ThemeToggle />
-
-        <h1 className="wordmark">
-          <Link href="/" className="wordmarkLink">
-            DocSearch
-          </Link>
-        </h1>
-        <p className="wordmarkSub">
-          Semantic search over three manuals. Retrieval only.
-        </p>
-
-        <nav className="contentsHeading" aria-label="On this page">
-          <ul className="contentsList">
-            {NAV.map(([label, href]) => (
-              <li key={href}>
-                <a className="contentsItem" href={href}>
-                  <span className="contentsItemLabel">
-                    <span className="contentsItemName">{label}</span>
-                  </span>
-                </a>
-              </li>
-            ))}
-          </ul>
-        </nav>
-
-        <p className="contentsNote">
-          Measured on {facts.generated} against the deployed index. Regenerate
-          with <code>npm run db:stats -- --facts</code>.
-        </p>
-      </aside>
+      <HowItWorksRail />
 
       <main className="main">
         {/* =============================================================== */}

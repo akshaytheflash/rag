@@ -189,6 +189,8 @@ input {
 .skipLink:focus {
   left: 0.5rem;
   top: 0.5rem;
+  /* The skip link is a keyboard escape hatch; it must jump instantly. */
+  scroll-behavior: auto;
 }
 
 /* ==========================================================================
@@ -814,6 +816,18 @@ input {
 }
 
 /* --- Section openers ----------------------------------------------------- */
+
+/* In-page section navigation scrolls smoothly.
+   `scroll-behavior` is what animates the jump; the `scroll-margin-top` on
+   .docSection below only reserves space for it to land in, so the heading is
+   not tucked under the viewport edge when it arrives.
+
+   Scoped to :root rather than set globally on the skip link, which should stay
+   instant - it is a keyboard escape hatch, and making it glide is the opposite
+   of helpful. */
+:root {
+  scroll-behavior: smooth;
+}
 
 .docSection {
   padding: 3.5rem 0 0;
@@ -1457,6 +1471,12 @@ input {
    doing this job, and doing it with one less element. */
 
 @media (prefers-reduced-motion: reduce) {
+  /* Smooth scrolling is motion, and it is motion the visitor did not ask for:
+     the section still has to arrive, just without gliding there first. */
+  :root {
+    scroll-behavior: auto;
+  }
+
   /* The global reduced-motion block already neutralises animation and
      transition timing. The collapsed passage needs one extra rule: at 0.001ms
      the grid would snap open and show text that was never asked for. */
