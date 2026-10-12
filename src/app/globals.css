@@ -1374,13 +1374,15 @@ input {
 /* ==========================================================================
    Motion
 
-   Four moments, and only four. Each one answers an action and shows what
+   Three moments, and only three. Each one answers an action and shows what
    changed; nothing here moves on its own.
 
    A card-by-card hover transition on every element is the default look of a
    generated page, and it costs something real: it makes the interface feel like
    it is performing rather than answering. The rule applied throughout is that
-   motion must be load-bearing. If removing it loses no information, it goes.
+   motion must be load-bearing. If removing it loses no information, it goes -
+   which is how the fourth candidate, a spine on the contents rail, ended up
+   deleted rather than shipped.
    ========================================================================== */
 
 /* 1. Results arriving. This is the one orchestrated moment on the page: the
@@ -1446,38 +1448,13 @@ input {
   transform: rotate(180deg);
 }
 
-/* 4. The selected manual in the contents rail. The spine slides between items
-   so the change of filter is visible in the same place it was made. */
-.contentsItem {
-  position: relative;
-}
-
-.contentsItem::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  top: 0.45rem;
-  bottom: 0.45rem;
-  width: 2px;
-  background: currentColor;
-  transform: scaleY(0);
-  transform-origin: top;
-  transition: transform 180ms cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.contentsItem:hover::before {
-  transform: scaleY(0.4);
-}
-
-.contentsItemActive::before {
-  transform: scaleY(1);
-}
-
-/* Keyboard users get the ring on the row itself; the spine is decoration and
-   must not be the only signal that the row is selected. */
-.contentsItem:focus-visible::before {
-  transform: scaleY(1);
-}
+/* 4. The selected manual in the contents rail.
+   Already handled above: `.contentsItem` has a 2px left border that animates
+   from transparent to currentColor via the existing `transition: border-color`.
+   An earlier version of this added a ::before spine on top of that and drew two
+   lines in the same 2px slot, because the border was overlooked when the motion
+   pass was written. Nothing extra is needed here - the indicator was already
+   doing this job, and doing it with one less element. */
 
 @media (prefers-reduced-motion: reduce) {
   /* The global reduced-motion block already neutralises animation and
