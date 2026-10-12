@@ -42,6 +42,63 @@
   --font-mono: var(--font-plex-mono), ui-monospace, "SFMono-Regular", Menlo, monospace;
 }
 
+/* --------------------------------------------------------------------------
+   Dark mode.
+
+   Not an inversion. The light ground is a cool blue-grey, so the dark ground
+   keeps that same hue at low lightness rather than going neutral or pure black.
+   A pure #000 or #111 ground is the most recognisable default in dark mode, and
+   it would fight the paper metaphor the rest of the interface is built on.
+
+   Every colour the charts use is already a token, so the figures invert with
+   the page and need no separate rules. The three manual hues are lightened
+   rather than reused: the originals were chosen as ink on light paper and drop
+   below a readable contrast against a dark ground.
+   -------------------------------------------------------------------------- */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --paper: #14161a;
+  --paper-sunk: #1c1f25;
+  --ink: #e8eaed;
+  --ink-2: #a2a9b4;
+  --ink-3: #767d89;
+  --rule: #2a2e36;
+  --rule-strong: #454b56;
+
+  /* Same hues as the light theme, lifted for contrast on a dark ground. Python
+     and PostgreSQL stay deliberately close: they are adjacent blues and carry
+     different information, so they must remain distinguishable but related. */
+  --python: #6ba3d6;
+  --fastapi: #3fb8a5;
+  --postgresql: #7d9fd0;
+
+  --focus: #e8eaed;
+}
+
+/* Honour the OS setting until the visitor chooses otherwise. An explicit
+   data-theme wins in both directions, so a choice made here survives the system
+   changing later. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+
+    --paper: #14161a;
+    --paper-sunk: #1c1f25;
+    --ink: #e8eaed;
+    --ink-2: #a2a9b4;
+    --ink-3: #767d89;
+    --rule: #2a2e36;
+    --rule-strong: #454b56;
+
+    --python: #6ba3d6;
+    --fastapi: #3fb8a5;
+    --postgresql: #7d9fd0;
+
+    --focus: #e8eaed;
+  }
+}
+
 *,
 *::before,
 *::after {
@@ -333,7 +390,7 @@ input {
 }
 
 .searchSubmit:hover:not(:disabled) {
-  background: #000;
+  background: var(--ink-2);
 }
 
 .searchSubmit:disabled {
@@ -1188,4 +1245,48 @@ input {
     margin-left: 0;
     margin-right: 0;
   }
+}
+/* --------------------------------------------------------------------------
+   Theme toggle
+
+   Two labelled buttons rather than a single icon that swaps. The label states
+   the theme you would get, not the one you are in, which is the convention
+   people already know from system settings and is unambiguous at a glance.
+   -------------------------------------------------------------------------- */
+
+.themeToggle {
+  display: inline-flex;
+  margin-top: auto;
+  padding-top: 1rem;
+  gap: 0;
+  border: 1px solid var(--rule);
+  align-self: flex-start;
+}
+
+.themeButton {
+  padding: 0.25rem 0.6rem;
+  font-size: var(--step--1);
+  color: var(--ink-3);
+  transition: color 120ms ease, background-color 120ms ease;
+}
+
+.themeButton + .themeButton {
+  border-left: 1px solid var(--rule);
+}
+
+.themeButton:hover {
+  color: var(--ink);
+}
+
+/* The active theme is marked in CSS against the label rather than by swapping
+   text in React state, so the server-rendered HTML already carries both words
+   and there is nothing to hydrate into. */
+.themeButtonLabel[data-active="true"] {
+  color: var(--ink);
+  background: var(--paper-sunk);
+}
+
+.themeButtonLabel {
+  display: inline-block;
+  padding: 0 0.15rem;
 }

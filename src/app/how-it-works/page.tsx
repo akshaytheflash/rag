@@ -1,4 +1,5 @@
 ﻿import Link from "next/link";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { facts, formatBytes } from "@/lib/facts";
 
 export const metadata = {
@@ -68,6 +69,8 @@ export default function HowItWorksPage() {
           Measured on {facts.generated} against the deployed index. Regenerate
           with <code>npm run db:stats -- --facts</code>.
         </p>
+
+        <ThemeToggle />
       </aside>
 
       <main className="main">
@@ -86,7 +89,7 @@ export default function HowItWorksPage() {
 
           <div className="statBand">
             <StatFigure value={total.toLocaleString()} label="passages indexed" note={`across ${corpus.length} manuals`} />
-            <StatFigure value={`${(rel.min).toFixed(2)}–${noise.max.toFixed(2)}`} label="the usable score band" note="no answer scores below the gap" />
+            <StatFigure value={`${noise.max.toFixed(2)}–${rel.min.toFixed(2)}`} label="the gap" note="below it nothing is relevant" />
             <StatFigure value={latency.deployedWarmMs} suffix="ms" label="warm query" note={`${latency.deployedColdMs} ms cold`} />
             <StatFigure value="0" label="tokens generated" note="nothing is written, only quoted" />
           </div>

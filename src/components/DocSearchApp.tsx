@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import type { CorpusStat, SearchResponse } from "@/lib/search";
 import { useSearchParams } from "next/navigation";
@@ -6,6 +6,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { ContentsList } from "./ContentsList";
 import { ResultList } from "./ResultList";
+import { ThemeToggle } from "./ThemeToggle";
 
 type Status = "idle" | "loading" | "done" | "error";
 
@@ -154,6 +155,8 @@ export function DocSearchApp({ sources, totalPassages }: DocSearchAppProps) {
             How this works
           </Link>
         </p>
+
+        <ThemeToggle />
       </aside>
 
       <main className="main">

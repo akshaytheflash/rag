@@ -1,5 +1,6 @@
-import type { Metadata } from "next";
+﻿import type { Metadata } from "next";
 import { Instrument_Serif, IBM_Plex_Mono } from "next/font/google";
+import { themeScript } from "@/components/ThemeToggle";
 import "./globals.css";
 
 const instrumentSerif = Instrument_Serif({
@@ -31,6 +32,10 @@ export const viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={`${instrumentSerif.variable} ${plexMono.variable}`}>
+      <head>
+        {/* Sets the theme before first paint. See themeScript. */}
+        <script dangerouslySetInnerHTML={{ __html: themeScript }} />
+      </head>
       <body>
         <a className="skipLink" href="#search">
           Skip to search
